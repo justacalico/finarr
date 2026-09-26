@@ -172,7 +172,7 @@ pages:
   script:
     - cd landing
     - /opt/flutter/bin/flutter pub get
-    - /opt/flutter/bin/flutter build web --release --base-href "/finarr/"
+    - /opt/flutter/bin/flutter build web --release --base-href "/"
     - cd ..
     - mkdir -p public
     - cp -r landing/build/web/. public/
