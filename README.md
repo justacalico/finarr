@@ -18,9 +18,10 @@ cargo build --release
 Docker:
 
 ```bash
-docker build -t finarr .
-docker run -p 8787:8787 -v finarr-data:/config finarr
+docker run -p 8787:8787 -p 4242:4242 -p 4242:4242/udp -v finarr-data:/data ghcr.io/justacalico/finarr:latest
 ```
+
+or build locally with `docker build -t finarr .`.
 
 ## What's inside
 
