@@ -75,6 +75,7 @@ github-sync:
           SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
         fi
         git push github HEAD:refs/heads/main
+        git push github "refs/tags/*:refs/tags/*"
         # Watch the GitHub build for the pushed commit so a failed job on
         # GitHub also fails this pipeline.
         RUN_ID=$(bash scripts/watch-github-run.sh find --sha "$SHA" --event push --branch main ${SINCE:+--since "$SINCE"} || true)
