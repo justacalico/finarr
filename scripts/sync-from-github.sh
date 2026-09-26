@@ -65,11 +65,22 @@ if [ -n "${GITLAB_RELEASE_SSH_KEY:-}" ]; then
   git push -f gitlab-ssh "$RELEASE_TAG"
 fi
 
-# Mirror to a GitLab release. The tag is kept the same as GitHub.
-# glab in CI will use CI_JOB_TOKEN when GLAB_ENABLE_CI_AUTOLOGIN is set.
-glab release create "$RELEASE_TAG" \
-  --name "Finarr $RELEASE_TAG" \
-  --notes "Mirrored from the GitHub release." \
-  --ref "$RELEASE_COMMIT" \
-  --use-package-registry \
-  "$PROJECT_DIR/release-assets"/*
+# Mirror to a GitLab release: upload each asset as a generic package, then
+# link them in the release. CI_JOB_TOKEN can't create releases, so this uses
+# GITLAB_TOKEN (project access token with api scope).
+for f in "$PROJECT_DIR/release-assets"/*; do
+  fname=$(basename "$f")
+  curl -fsSL --retry 3 -X PUT -H "PRIVATE-TOKEN: $GITLAB_TOKEN" \
+    --data-binary "@$f" \
+    "https://${CI_SERVER_HOST}/api/v4/projects/$CI_PROJECT_ID/packages/generic/release-assets/$RELEASE_TAG/$fname"
+done
+LINKS="[]"
+for f in "$PROJECT_DIR/release-assets"/*; do
+  fname=$(basename "$f")
+  url="https://${CI_SERVER_HOST}/api/v4/projects/$CI_PROJECT_ID/packages/generic/release-assets/$RELEASE_TAG/$fname"
+  LINKS=$(echo "$LINKS" | jq --arg url "$url" --arg name "$fname" '. + [{name:$name,url:$url,link_type:"other"}]')
+done
+curl -fsSL -X POST -H "PRIVATE-TOKEN: $GITLAB_TOKEN" -H "Content-Type: application/json" \
+  "https://${CI_SERVER_HOST}/api/v4/projects/$CI_PROJECT_ID/releases" \
+  -d "$(jq -n --arg tag "$RELEASE_TAG" --arg ref "$RELEASE_COMMIT" --arg name "Finarr $RELEASE_TAG" --argjson links "$LINKS" \
+    '{tag_name:$tag, ref:$ref, name:$name, description:"Mirrored from the GitHub release.", assets:{links:$links}}')"
