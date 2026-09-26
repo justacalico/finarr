@@ -1,0 +1,123 @@
+//! Indexer CRUD + connectivity tests.
+
+use axum::extract::{Path, State};
+use axum::Json;
+use serde::Deserialize;
+use serde_json::{json, Value};
+use std::sync::Arc;
+
+use crate::auth::AdminUser;
+use crate::error::ApiError;
+use crate::indexers::{self, torznab::TorznabClient};
+use crate::AppState;
+
+#[derive(Debug, Deserialize)]
+pub struct IndexerBody {
+    pub name: String,
+    pub url: String,
+    pub api_key: Option<String>,
+    pub enabled: Option<bool>,
+    pub categories: Option<Vec<u32>>,
+    pub priority: Option<i64>,
+}
+
+pub async fn list(
+    _user: crate::auth::AuthUser,
+    State(state): State<Arc<AppState>>,
+) -> Result<Json<Value>, ApiError> {
+    let items = indexers::list(&state.db).await.map_err(ApiError::internal)?;
+    Ok(Json(json!({ "indexers": items })))
+}
+
+pub async fn create(
+    _admin: AdminUser,
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<IndexerBody>,
+) -> Result<Json<Value>, ApiError> {
+    if body.name.trim().is_empty() || body.url.trim().is_empty() {
+        return Err(ApiError::bad_request("name and url required"));
+    }
+    let idx = indexers::create(
+        &state.db,
+        body.name.trim(),
+        body.url.trim(),
+        body.api_key.as_deref().unwrap_or(""),
+        &body.categories.unwrap_or_default(),
+        body.priority.unwrap_or(25),
+    )
+    .await
+    .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "indexer": idx })))
+}
+
+pub async fn update(
+    _admin: AdminUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+    Json(body): Json<IndexerBody>,
+) -> Result<Json<Value>, ApiError> {
+    indexers::update(
+        &state.db,
+        id,
+        body.name.trim(),
+        body.url.trim(),
+        body.api_key.as_deref().unwrap_or(""),
+        body.enabled.unwrap_or(true),
+        &body.categories.unwrap_or_default(),
+        body.priority.unwrap_or(25),
+    )
+    .await
+    .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+pub async fn remove(
+    _admin: AdminUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> Result<Json<Value>, ApiError> {
+    indexers::delete(&state.db, id)
+        .await
+        .map_err(ApiError::internal)?;
+    Ok(Json(json!({ "ok": true })))
+}
+
+/// Probe an indexer that is already saved.
+pub async fn test(
+    _admin: AdminUser,
+    State(state): State<Arc<AppState>>,
+    Path(id): Path<i64>,
+) -> Result<Json<Value>, ApiError> {
+    let idx = indexers::get(&state.db, id)
+        .await
+        .map_err(ApiError::internal)?
+        .ok_or_else(|| ApiError::not_found("indexer not found"))?;
+    test_client(&state, &idx.url, &idx.api_key).await
+}
+
+/// Probe unsaved credentials (used by the add-indexer dialog).
+pub async fn test_new(
+    _admin: AdminUser,
+    State(state): State<Arc<AppState>>,
+    Json(body): Json<IndexerBody>,
+) -> Result<Json<Value>, ApiError> {
+    test_client(&state, &body.url, body.api_key.as_deref().unwrap_or("")).await
+}
+
+async fn test_client(
+    state: &Arc<AppState>,
+    url: &str,
+    api_key: &str,
+) -> Result<Json<Value>, ApiError> {
+    let client = TorznabClient::new(url, api_key, state.http.clone());
+    match client.caps().await {
+        Ok(caps) => Ok(Json(json!({
+            "ok": true,
+            "caps": caps,
+        }))),
+        Err(e) => Ok(Json(json!({
+            "ok": false,
+            "error": e.to_string(),
+        }))),
+    }
+}

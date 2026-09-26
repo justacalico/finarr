@@ -1,0 +1,30 @@
+# Rust
+/target/
+**/*.rs.bk
+
+# Flutter
+.flutter-plugins
+.flutter-plugins-dependencies
+
+# App data
+/data/
+*.db
+*.db-journal
+
+# Secrets
+*.jks
+key.properties
+flutter/android/key.properties
+.env
+.env.*
+
+# Frontend embed output
+/frontend/dist/
+
+# Coverage
+coverage/
+*.lcov
+
+# OS
+.DS_Store
+Thumbs.db

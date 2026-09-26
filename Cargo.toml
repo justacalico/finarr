@@ -1,0 +1,81 @@
+[package]
+name = "finarr"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.88.0"
+license = "AGPL-3.0-only"
+description = "All-in-one media automation: torrent client, indexer search, and movie/series/music libraries in a single binary."
+repository = "https://gitlab.com/HttpAnimations/finarr"
+homepage = "https://gitlab.com/HttpAnimations/finarr"
+
+[[bin]]
+name = "finarr"
+path = "src/main.rs"
+
+[lib]
+name = "finarr"
+path = "src/lib.rs"
+
+[workspace]
+resolver = "2"
+
+[dependencies]
+# Web framework
+axum = { version = "0.8", features = ["multipart"] }
+tower = "0.5"
+tower-http = { version = "0.6", features = ["trace", "compression-gzip", "fs", "cors", "limit", "set-header"] }
+http = "1"
+
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+tokio-util = "0.7"
+futures = "0.3"
+
+# Database
+sqlx = { version = "0.8", features = ["runtime-tokio", "sqlite", "chrono", "uuid", "migrate"] }
+
+# Serialization
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_urlencoded = "0.7"
+
+# Auth & crypto
+argon2 = "0.5"
+rand = "0.8"
+base64 = "0.22"
+sha2 = "0.10"
+subtle = "2"
+
+# Torrent engine
+librqbit = { version = "9", default-features = false, features = ["rust-tls"] }
+librqbit-core = { version = "9", default-features = false, features = ["sha1-ring"] }
+
+# HTTP client for indexers and metadata providers
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "webpki-roots", "gzip", "multipart", "query", "form", "cookies"] }
+
+# Torznab / RSS parsing
+quick-xml = { version = "0.37", features = ["serialize"] }
+
+# Static web UI embedding
+include_dir = "0.7"
+mime_guess = "2"
+
+# Media
+regex = "1"
+walkdir = "2"
+urlencoding = "2"
+
+# Utils
+uuid = { version = "1", features = ["v4", "serde"] }
+chrono = { version = "0.4", features = ["serde"] }
+thiserror = "2"
+anyhow = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+hex = "0.4"
+bytes = "1"
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+tokio = { version = "1", features = ["full", "test-util"] }
