@@ -69,12 +69,12 @@ impl Engine {
         std::fs::create_dir_all(&downloads_dir).context("create downloads dir")?;
         std::fs::create_dir_all(&state_dir).context("create torrent state dir")?;
 
-        let opts = SessionOptions {
+        let make_opts = |port: u16| SessionOptions {
             persistence: Some(SessionPersistenceConfig::Json {
-                folder: Some(state_dir),
+                folder: Some(state_dir.clone()),
             }),
             listen: Some(librqbit::ListenerOptions {
-                listen_addr: SocketAddr::from((Ipv6Addr::UNSPECIFIED, settings.listen_port)),
+                listen_addr: SocketAddr::from((Ipv6Addr::UNSPECIFIED, port)),
                 enable_upnp_port_forwarding: true,
                 ..Default::default()
             }),
@@ -90,9 +90,25 @@ impl Engine {
             ..Default::default()
         };
 
-        let session = Session::new_with_opts(downloads_dir.clone(), opts)
-            .await
-            .context("start torrent session")?;
+        let session = match Session::new_with_opts(
+            downloads_dir.clone(),
+            make_opts(settings.listen_port),
+        )
+        .await
+        {
+            Ok(s) => s,
+            Err(e) => {
+                // Port already taken: fall back to an OS-assigned port so
+                // the app still starts instead of dying at boot.
+                tracing::warn!(
+                    "torrent listen port {} unavailable ({e:?}), using a random port",
+                    settings.listen_port
+                );
+                Session::new_with_opts(downloads_dir.clone(), make_opts(0))
+                    .await
+                    .context("start torrent session")?
+            }
+        };
 
         let engine = Self {
             session,
