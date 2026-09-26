@@ -67,13 +67,24 @@ pub async fn update(
     Path(id): Path<i64>,
     Json(body): Json<IndexerBody>,
 ) -> Result<Json<Value>, ApiError> {
+    // A masked key means "unchanged": keep the stored one instead of
+    // persisting asterisks.
+    let api_key = match body.api_key.as_deref() {
+        Some("********") => indexers::get(&state.db, id)
+            .await
+            .map_err(ApiError::internal)?
+            .map(|i| i.api_key)
+            .unwrap_or_default(),
+        Some(k) => k.to_string(),
+        None => String::new(),
+    };
     indexers::update(
         &state.db,
         id,
         &indexers::IndexerConfig {
             name: body.name.trim(),
             url: body.url.trim(),
-            api_key: body.api_key.as_deref().unwrap_or(""),
+            api_key: &api_key,
             enabled: body.enabled.unwrap_or(true),
             categories: &body.categories.unwrap_or_default(),
             priority: body.priority.unwrap_or(25),

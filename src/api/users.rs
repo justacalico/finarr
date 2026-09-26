@@ -142,6 +142,12 @@ pub async fn update(
             .execute(state.db.pool())
             .await
             .map_err(ApiError::internal)?;
+        // Resetting someone's password ends their sessions.
+        sqlx::query("DELETE FROM sessions WHERE user_id=? AND kind='session'")
+            .bind(id)
+            .execute(state.db.pool())
+            .await
+            .map_err(ApiError::internal)?;
     }
     Ok(Json(json!({ "ok": true })))
 }
