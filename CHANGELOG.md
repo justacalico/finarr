@@ -2,6 +2,13 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.1.1](https://gitlab.com/HttpAnimations/finarr/compare/3e91d7fd148a40578fe81525fc8ad0742842d0d0..v0.1.1) - 2026-09-26
+#### Bug Fixes
+- Docker 镜像发布迁移到 GitHub Actions - ([76eb52d](https://gitlab.com/HttpAnimations/finarr/commit/76eb52d43dcc81e0ad321856ca26c11a4d1e0892)) - HttpAnimations
+- Pages 任务补充 python3 依赖 - ([3e91d7f](https://gitlab.com/HttpAnimations/finarr/commit/3e91d7fd148a40578fe81525fc8ad0742842d0d0)) - HttpAnimations
+
+- - -
+
 ## [v0.1.0](https://gitlab.com/HttpAnimations/finarr/compare/9ba17a2be2cf19464881831bd947923dc49de5a4..v0.1.0) - 2026-09-26
 #### Features
 - 添加完整应用界面、发布流水线与平台图标 - ([3293e75](https://gitlab.com/HttpAnimations/finarr/commit/3293e7509271c27f8f95d737f8ee19533b5dbe23)) - HttpAnimations
