@@ -221,40 +221,46 @@ class _Toolbar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final filters = ['all', 'downloading', 'seeding', 'completed', 'paused'];
+    final chips = Wrap(
+      spacing: 6,
+      children: [
+        for (final f in filters)
+          ChoiceChip(
+            label: Text(f),
+            selected: filter == f,
+            onSelected: (_) => onFilter(f),
+            visualDensity: VisualDensity.compact,
+          ),
+      ],
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          IconButton.filledTonal(
-            tooltip: 'Add magnet / URL',
-            onPressed: onAddMagnet,
-            icon: const Icon(Icons.add_link),
-          ),
-          const SizedBox(width: 4),
-          IconButton.filledTonal(
-            tooltip: 'Add .torrent file',
-            onPressed: onAddFile,
-            icon: const Icon(Icons.upload_file_outlined),
-          ),
-          const SizedBox(width: 4),
-          IconButton.filledTonal(
-            tooltip: 'Rate limits',
-            onPressed: onLimits,
-            icon: const Icon(Icons.speed_outlined),
-          ),
-          const Spacer(),
-          Wrap(
-            spacing: 6,
+          Row(
             children: [
-              for (final f in filters)
-                ChoiceChip(
-                  label: Text(f),
-                  selected: filter == f,
-                  onSelected: (_) => onFilter(f),
-                  visualDensity: VisualDensity.compact,
-                ),
+              IconButton.filledTonal(
+                tooltip: 'Add magnet / URL',
+                onPressed: onAddMagnet,
+                icon: const Icon(Icons.add_link),
+              ),
+              const SizedBox(width: 4),
+              IconButton.filledTonal(
+                tooltip: 'Add .torrent file',
+                onPressed: onAddFile,
+                icon: const Icon(Icons.upload_file_outlined),
+              ),
+              const SizedBox(width: 4),
+              IconButton.filledTonal(
+                tooltip: 'Rate limits',
+                onPressed: onLimits,
+                icon: const Icon(Icons.speed_outlined),
+              ),
             ],
           ),
+          const SizedBox(height: 8),
+          chips,
         ],
       ),
     );
@@ -488,7 +494,7 @@ class _DetailPaneState extends State<_DetailPane> {
 
   String _ratio(Map<String, dynamic> t) {
     final total = (t['total_bytes'] ?? 0);
-    if (total == 0) return '—';
+    if (total == 0) return '-';
     return ((t['uploaded_bytes'] ?? 0) / total).toStringAsFixed(2);
   }
 

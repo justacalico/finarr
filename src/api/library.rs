@@ -26,7 +26,9 @@ pub async fn list_movies(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Value>, ApiError> {
-    let items = media::list_movies(&state.db).await.map_err(ApiError::internal)?;
+    let items = media::list_movies(&state.db)
+        .await
+        .map_err(ApiError::internal)?;
     Ok(Json(json!({ "movies": items })))
 }
 
@@ -57,7 +59,8 @@ pub async fn add_movie(
     }
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
     let details = tmdb::movie(&state.http, &meta.tmdb_api_key, body.tmdb_id)
         .await
         .map_err(|e| ApiError::bad_request(format!("tmdb lookup failed: {e}")))?;
@@ -131,7 +134,9 @@ pub async fn list_series(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Value>, ApiError> {
-    let items = media::list_series(&state.db).await.map_err(ApiError::internal)?;
+    let items = media::list_series(&state.db)
+        .await
+        .map_err(ApiError::internal)?;
     Ok(Json(json!({ "series": items })))
 }
 
@@ -143,7 +148,9 @@ pub async fn get_series(
     let s = media::get_series(&state.db, id)
         .await
         .map_err(|_| ApiError::not_found("series not found"))?;
-    let seasons = media::series_seasons(&state.db, id).await.unwrap_or_default();
+    let seasons = media::series_seasons(&state.db, id)
+        .await
+        .unwrap_or_default();
     Ok(Json(json!({ "series": s, "seasons": seasons })))
 }
 
@@ -154,7 +161,8 @@ pub async fn add_series(
 ) -> Result<Json<Value>, ApiError> {
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
     let details = tvmaze::show(&state.http, body.tvmaze_id)
         .await
         .map_err(|e| ApiError::bad_request(format!("tvmaze lookup failed: {e}")))?;
@@ -277,7 +285,9 @@ pub async fn list_artists(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Value>, ApiError> {
-    let items = media::list_artists(&state.db).await.map_err(ApiError::internal)?;
+    let items = media::list_artists(&state.db)
+        .await
+        .map_err(ApiError::internal)?;
     Ok(Json(json!({ "artists": items })))
 }
 
@@ -289,7 +299,9 @@ pub async fn get_artist(
     let a = media::get_artist(&state.db, id)
         .await
         .map_err(|_| ApiError::not_found("artist not found"))?;
-    let albums = media::artist_albums(&state.db, id).await.unwrap_or_default();
+    let albums = media::artist_albums(&state.db, id)
+        .await
+        .unwrap_or_default();
     Ok(Json(json!({ "artist": a, "albums": albums })))
 }
 
@@ -300,7 +312,8 @@ pub async fn add_artist(
 ) -> Result<Json<Value>, ApiError> {
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
     let albums = musicbrainz::albums(&state.http, &body.mbid)
         .await
         .map_err(|e| ApiError::bad_request(format!("musicbrainz lookup failed: {e}")))?;
@@ -313,8 +326,7 @@ pub async fn add_artist(
         image_url: None,
     };
     // The real name comes from the search endpoint; look it up once here.
-    let artist = if let Ok(mut res) = musicbrainz::search_artists(&state.http, &body.mbid).await
-    {
+    let artist = if let Ok(mut res) = musicbrainz::search_artists(&state.http, &body.mbid).await {
         res.pop().filter(|a| a.mbid == body.mbid).unwrap_or(artist)
     } else {
         artist
@@ -447,7 +459,7 @@ pub async fn wanted(
     .map(|r| {
         json!({
             "kind": "album", "id": r.get::<i64,_>("id"),
-            "title": format!("{} — {}", r.get::<String,_>("artist"), r.get::<String,_>("title")),
+            "title": format!("{}, {}", r.get::<String,_>("artist"), r.get::<String,_>("title")),
             "poster_url": r.get::<Option<String>,_>("image_url"),
             "date": r.get::<Option<String>,_>("release_date"),
         })
@@ -470,8 +482,11 @@ pub async fn scan_library(
 ) -> Result<Json<Value>, ApiError> {
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
         .await
-        .unwrap_or_default();
-    let report = scan::run(&state.db, &paths).await.map_err(ApiError::internal)?;
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
+    let report = scan::run(&state.db, &paths)
+        .await
+        .map_err(ApiError::internal)?;
     Ok(Json(json!({ "report": report })))
 }
 
@@ -508,9 +523,10 @@ pub mod scan {
         if root.is_dir() {
             for dir in std::fs::read_dir(root)?.filter_map(|e| e.ok()) {
                 let dirname = dir.file_name().to_string_lossy().to_lowercase();
-                let Some(s) = series.iter().find(|s| {
-                    naming::sanitize(&s.title).to_lowercase() == dirname
-                }) else {
+                let Some(s) = series
+                    .iter()
+                    .find(|s| naming::sanitize(&s.title).to_lowercase() == dirname)
+                else {
                     continue;
                 };
                 let episodes = media::series_episodes(db, s.id).await?;
@@ -520,7 +536,10 @@ pub mod scan {
                         continue;
                     }
                     report.files_seen += 1;
-                    let fname = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    let fname = p
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
                     let parsed = parse::parse_release(&fname);
                     let hit = episodes.iter().find(|e| {
                         e.status != "imported"
@@ -569,12 +588,8 @@ pub mod scan {
             for dir in std::fs::read_dir(mroot)?.filter_map(|e| e.ok()) {
                 let dirname = dir.file_name().to_string_lossy().to_lowercase();
                 let Some(m) = movies.iter().find(|m| {
-                    let want = format!(
-                        "{} ({})",
-                        naming::sanitize(&m.title),
-                        m.year.unwrap_or(0)
-                    )
-                    .to_lowercase();
+                    let want = format!("{} ({})", naming::sanitize(&m.title), m.year.unwrap_or(0))
+                        .to_lowercase();
                     dirname == want || dirname == naming::sanitize(&m.title).to_lowercase()
                 }) else {
                     continue;
@@ -591,7 +606,9 @@ pub mod scan {
                     }
                     let size = p.metadata().map(|m| m.len() as i64).unwrap_or(0);
                     let quality = parse::parse_release(
-                        &p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default(),
+                        &p.file_name()
+                            .map(|n| n.to_string_lossy().into_owned())
+                            .unwrap_or_default(),
                     )
                     .resolution
                     .map(|r| format!("{r}p"))
@@ -638,9 +655,10 @@ pub mod scan {
                     }
                     let albums = media::artist_albums(db, artist.id).await?;
                     let dirname = e.file_name().to_string_lossy().to_lowercase();
-                    let Some(album) = albums.iter().find(|a| {
-                        dirname.starts_with(&naming::sanitize(&a.title).to_lowercase())
-                    }) else {
+                    let Some(album) = albums
+                        .iter()
+                        .find(|a| dirname.starts_with(&naming::sanitize(&a.title).to_lowercase()))
+                    else {
                         continue;
                     };
                     let mut size = 0i64;

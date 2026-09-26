@@ -56,7 +56,9 @@ pub async fn create(
         return Err(ApiError::bad_request("username required"));
     }
     if body.password.len() < 8 {
-        return Err(ApiError::bad_request("password must be at least 8 characters"));
+        return Err(ApiError::bad_request(
+            "password must be at least 8 characters",
+        ));
     }
     let role = match body.role.as_deref() {
         Some("admin") => "admin",
@@ -75,9 +77,7 @@ pub async fn create(
     .await;
     match res {
         Ok(row) => Ok(Json(json!({ "id": row.get::<i64,_>("id") }))),
-        Err(e) if e.to_string().contains("UNIQUE") => {
-            Err(ApiError::conflict("username taken"))
-        }
+        Err(e) if e.to_string().contains("UNIQUE") => Err(ApiError::conflict("username taken")),
         Err(e) => Err(ApiError::internal(e)),
     }
 }
@@ -128,7 +128,9 @@ pub async fn update(
     }
     if let Some(pw) = &body.password {
         if pw.len() < 8 {
-            return Err(ApiError::bad_request("password must be at least 8 characters"));
+            return Err(ApiError::bad_request(
+                "password must be at least 8 characters",
+            ));
         }
         let hash = password::hash_password(pw).map_err(ApiError::internal)?;
         sqlx::query("UPDATE users SET password_hash=? WHERE id=?")

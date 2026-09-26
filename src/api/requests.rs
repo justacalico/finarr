@@ -33,7 +33,10 @@ pub async fn list(
     if !status.is_empty() {
         q = q.bind(status);
     }
-    let rows = q.fetch_all(state.db.pool()).await.map_err(ApiError::internal)?;
+    let rows = q
+        .fetch_all(state.db.pool())
+        .await
+        .map_err(ApiError::internal)?;
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {
@@ -73,7 +76,8 @@ pub async fn create(
 ) -> Result<Json<Value>, ApiError> {
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
     let (title, year, poster, detail) = match body.media_type.as_str() {
         "movie" => {
             let meta = settings::get::<MetadataSettings>(&state.db, "metadata")
@@ -89,7 +93,10 @@ pub async fn create(
             let m = tmdb::movie(&state.http, &meta.tmdb_api_key, tmdb_id)
                 .await
                 .map_err(|e| ApiError::bad_request(e.to_string()))?;
-            { let d = serde_json::to_value(&m).unwrap(); (m.title, m.year, m.poster_url, d) }
+            {
+                let d = serde_json::to_value(&m).unwrap();
+                (m.title, m.year, m.poster_url, d)
+            }
         }
         "series" => {
             let tvmaze_id: i64 = body
@@ -99,7 +106,10 @@ pub async fn create(
             let s = tvmaze::show(&state.http, tvmaze_id)
                 .await
                 .map_err(|e| ApiError::bad_request(e.to_string()))?;
-            { let d = serde_json::to_value(&s).unwrap(); (s.title, s.year, s.poster_url, d) }
+            {
+                let d = serde_json::to_value(&s).unwrap();
+                (s.title, s.year, s.poster_url, d)
+            }
         }
         "artist" => {
             let mut hits = musicbrainz::search_artists(&state.http, &body.external_id)
@@ -112,9 +122,16 @@ pub async fn create(
                 .ok_or_else(|| ApiError::bad_request("artist not found"))?
                 .clone();
             let _ = hits.pop();
-            { let d = serde_json::to_value(&a).unwrap(); (a.name.clone(), None, a.image_url.clone(), d) }
+            {
+                let d = serde_json::to_value(&a).unwrap();
+                (a.name.clone(), None, a.image_url.clone(), d)
+            }
         }
-        _ => return Err(ApiError::bad_request("media_type must be movie|series|artist")),
+        _ => {
+            return Err(ApiError::bad_request(
+                "media_type must be movie|series|artist",
+            ))
+        }
     };
 
     // Already in library? Fulfilled instantly.
@@ -144,7 +161,11 @@ pub async fn create(
     }
 
     // Admins' requests are auto-approved and kick off immediately.
-    let status = if user.is_admin() { "approved" } else { "pending" };
+    let status = if user.is_admin() {
+        "approved"
+    } else {
+        "pending"
+    };
     let row = sqlx::query(
         "INSERT INTO requests (media_type, external_id, title, year, poster_url, detail,
             requested_by, status, note, resolved_at)
@@ -183,23 +204,22 @@ async fn fulfill(state: &Arc<AppState>, request_id: i64, paths: &PathsSettings) 
     };
     let media_type: String = row.get("media_type");
     let external_id: String = row.get("external_id");
-    let detail: Value =
-        serde_json::from_str(&row.get::<String, _>("detail")).unwrap_or(json!({}));
+    let detail: Value = serde_json::from_str(&row.get::<String, _>("detail")).unwrap_or(json!({}));
     let result = match media_type.as_str() {
         "movie" => {
-            let m: crate::metadata::MovieResult =
-                match serde_json::from_value(detail) {
-                    Ok(m) => m,
-                    Err(_) => return,
-                };
-            media::add_movie(&state.db, &m, &paths.movies_root, true).await.map(|_| ())
+            let m: crate::metadata::MovieResult = match serde_json::from_value(detail) {
+                Ok(m) => m,
+                Err(_) => return,
+            };
+            media::add_movie(&state.db, &m, &paths.movies_root, true)
+                .await
+                .map(|_| ())
         }
         "series" => {
-            let s: crate::metadata::SeriesResult =
-                match serde_json::from_value(detail) {
-                    Ok(s) => s,
-                    Err(_) => return,
-                };
+            let s: crate::metadata::SeriesResult = match serde_json::from_value(detail) {
+                Ok(s) => s,
+                Err(_) => return,
+            };
             media::add_series(&state.db, &s, &paths.series_root, &[], true)
                 .await
                 .map(|_| ())
@@ -208,11 +228,10 @@ async fn fulfill(state: &Arc<AppState>, request_id: i64, paths: &PathsSettings) 
             let albums = musicbrainz::albums(&state.http, &external_id)
                 .await
                 .unwrap_or_default();
-            let a: crate::metadata::ArtistResult =
-                match serde_json::from_value(detail) {
-                    Ok(a) => a,
-                    Err(_) => return,
-                };
+            let a: crate::metadata::ArtistResult = match serde_json::from_value(detail) {
+                Ok(a) => a,
+                Err(_) => return,
+            };
             media::add_artist(&state.db, &a, &albums, &paths.music_root, true)
                 .await
                 .map(|_| ())
@@ -242,7 +261,8 @@ pub async fn approve(
     }
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
     fulfill(&state, id, &paths).await;
     Ok(Json(json!({ "ok": true })))
 }

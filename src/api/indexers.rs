@@ -25,7 +25,9 @@ pub async fn list(
     _user: crate::auth::AuthUser,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Value>, ApiError> {
-    let items = indexers::list(&state.db).await.map_err(ApiError::internal)?;
+    let items = indexers::list(&state.db)
+        .await
+        .map_err(ApiError::internal)?;
     Ok(Json(json!({ "indexers": items })))
 }
 
@@ -39,11 +41,14 @@ pub async fn create(
     }
     let idx = indexers::create(
         &state.db,
-        body.name.trim(),
-        body.url.trim(),
-        body.api_key.as_deref().unwrap_or(""),
-        &body.categories.unwrap_or_default(),
-        body.priority.unwrap_or(25),
+        &indexers::IndexerConfig {
+            name: body.name.trim(),
+            url: body.url.trim(),
+            api_key: body.api_key.as_deref().unwrap_or(""),
+            enabled: true,
+            categories: &body.categories.unwrap_or_default(),
+            priority: body.priority.unwrap_or(25),
+        },
     )
     .await
     .map_err(ApiError::internal)?;
@@ -59,12 +64,14 @@ pub async fn update(
     indexers::update(
         &state.db,
         id,
-        body.name.trim(),
-        body.url.trim(),
-        body.api_key.as_deref().unwrap_or(""),
-        body.enabled.unwrap_or(true),
-        &body.categories.unwrap_or_default(),
-        body.priority.unwrap_or(25),
+        &indexers::IndexerConfig {
+            name: body.name.trim(),
+            url: body.url.trim(),
+            api_key: body.api_key.as_deref().unwrap_or(""),
+            enabled: body.enabled.unwrap_or(true),
+            categories: &body.categories.unwrap_or_default(),
+            priority: body.priority.unwrap_or(25),
+        },
     )
     .await
     .map_err(ApiError::internal)?;

@@ -1,4 +1,4 @@
-//! Torznab client — works with Jackett, Prowlarr and any Newznab-style
+//! Torznab client, works with Jackett, Prowlarr and any Newznab-style
 //! indexer endpoint.
 
 use anyhow::{bail, Context, Result};
@@ -154,8 +154,7 @@ impl TorznabClient {
 
     /// Jackett and friends accept the apikey either as ?apikey= or ?api_key=.
     fn endpoint(&self, extra: &[(&str, String)]) -> String {
-        let mut params: Vec<(String, String)> =
-            vec![("apikey".into(), self.api_key.clone())];
+        let mut params: Vec<(String, String)> = vec![("apikey".into(), self.api_key.clone())];
         for (k, v) in extra {
             params.push((k.to_string(), v.clone()));
         }
@@ -179,7 +178,10 @@ impl TorznabClient {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
         if !status.is_success() {
-            bail!("torznab returned {status}: {}", &body[..body.len().min(300)]);
+            bail!(
+                "torznab returned {status}: {}",
+                &body[..body.len().min(300)]
+            );
         }
         if body.contains("<error") {
             bail!("torznab error: {}", &body[..body.len().min(300)]);
@@ -190,8 +192,7 @@ impl TorznabClient {
     /// Fetch capabilities; used by the "test" button in settings.
     pub async fn caps(&self) -> Result<CapsInfo> {
         let body = self.get(&[("t", "caps".to_string())]).await?;
-        let caps: TorznabCaps =
-            quick_xml::de::from_str(&body).context("parse torznab caps")?;
+        let caps: TorznabCaps = quick_xml::de::from_str(&body).context("parse torznab caps")?;
         let mut categories = Vec::new();
         for c in &caps.categories.categories {
             categories.push(format!("{}: {}", c.id, c.name));
@@ -199,11 +200,8 @@ impl TorznabClient {
                 categories.push(format!("{}: {}", s.id, s.name));
             }
         }
-        let avail = |s: &Option<SearchCaps>| {
-            s.as_ref()
-                .map(|s| s.available == "yes")
-                .unwrap_or(false)
-        };
+        let avail =
+            |s: &Option<SearchCaps>| s.as_ref().map(|s| s.available == "yes").unwrap_or(false);
         Ok(CapsInfo {
             movie_search: avail(&caps.searching.movie_search),
             tv_search: avail(&caps.searching.tv_search),

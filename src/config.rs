@@ -42,6 +42,7 @@ impl Config {
 /// `--port <n>`, `--host <addr>`.
 pub fn parse_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Result<Config> {
     let mut data_dir = PathBuf::from("data");
+    let mut data_dir_set = false;
     let mut dev_mode = false;
     let mut dev_local = false;
     let mut port_override = None;
@@ -56,6 +57,7 @@ pub fn parse_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Result<
             "--data-dir" => {
                 if let Some(v) = it.next() {
                     data_dir = PathBuf::from(v);
+                    data_dir_set = true;
                 }
             }
             "--port" => {
@@ -71,13 +73,34 @@ pub fn parse_args(args: impl IntoIterator<Item = std::ffi::OsString>) -> Result<
             _ => {
                 if let Some((k, v)) = arg.split_once('=') {
                     match k {
-                        "--data-dir" => data_dir = PathBuf::from(v),
+                        "--data-dir" => {
+                            data_dir = PathBuf::from(v);
+                            data_dir_set = true;
+                        }
                         "--port" => port_override = v.parse::<u16>().ok(),
                         "--host" => host_override = v.parse::<IpAddr>().ok(),
                         _ => {}
                     }
                 }
             }
+        }
+    }
+
+    // Container-friendly fallbacks: CLI flags win over env vars, env vars
+    // win over defaults. Nothing else in the app reads env vars.
+    if !data_dir_set {
+        if let Ok(v) = std::env::var("FINARR_DATA_DIR") {
+            data_dir = PathBuf::from(v);
+        }
+    }
+    if port_override.is_none() {
+        if let Ok(v) = std::env::var("FINARR_PORT") {
+            port_override = v.parse::<u16>().ok();
+        }
+    }
+    if host_override.is_none() {
+        if let Ok(v) = std::env::var("FINARR_HOST") {
+            host_override = v.parse::<IpAddr>().ok();
         }
     }
 

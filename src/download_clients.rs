@@ -138,10 +138,7 @@ impl QbitClient {
         let resp = self
             .http
             .post(format!("{}/api/v2/torrents/add", self.base()))
-            .form(&[
-                ("urls", url),
-                ("category", self.cfg.category.as_str()),
-            ])
+            .form(&[("urls", url), ("category", self.cfg.category.as_str())])
             .send()
             .await
             .context("qbit add request")?;
@@ -152,8 +149,7 @@ impl QbitClient {
     }
 
     pub async fn add_file(&self, bytes: &[u8], filename: &str) -> Result<()> {
-        let part = reqwest::multipart::Part::bytes(bytes.to_vec())
-            .file_name(filename.to_string());
+        let part = reqwest::multipart::Part::bytes(bytes.to_vec()).file_name(filename.to_string());
         let form = reqwest::multipart::Form::new()
             .part("torrents", part)
             .text("category", self.cfg.category.clone());

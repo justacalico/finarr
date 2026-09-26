@@ -50,7 +50,12 @@ pub async fn list(
                 serde_json::from_str(&r.get::<String, _>("settings")).unwrap_or(json!({}));
             // Never leak the stored password back to the UI.
             if let Some(obj) = cfg.as_object_mut() {
-                if obj.get("password").and_then(|p| p.as_str()).map(|p| !p.is_empty()).unwrap_or(false) {
+                if obj
+                    .get("password")
+                    .and_then(|p| p.as_str())
+                    .map(|p| !p.is_empty())
+                    .unwrap_or(false)
+                {
                     obj.insert("password".into(), json!("********"));
                 }
             }
@@ -96,12 +101,13 @@ pub async fn update(
     Path(id): Path<i64>,
     Json(body): Json<ClientBody>,
 ) -> Result<Json<Value>, ApiError> {
-    let existing: Option<String> = sqlx::query("SELECT settings FROM download_clients WHERE id = ?")
-        .bind(id)
-        .fetch_optional(state.db.pool())
-        .await
-        .map_err(ApiError::internal)?
-        .map(|r| r.get::<String, _>("settings"));
+    let existing: Option<String> =
+        sqlx::query("SELECT settings FROM download_clients WHERE id = ?")
+            .bind(id)
+            .fetch_optional(state.db.pool())
+            .await
+            .map_err(ApiError::internal)?
+            .map(|r| r.get::<String, _>("settings"));
     let Some(raw) = existing else {
         return Err(ApiError::not_found("client not found"));
     };
@@ -111,17 +117,15 @@ pub async fn update(
     if cfg.password == "********" {
         cfg.password = old.password;
     }
-    sqlx::query(
-        "UPDATE download_clients SET name=?, settings=?, priority=?, enabled=? WHERE id=?",
-    )
-    .bind(body.name.trim())
-    .bind(serde_json::to_string(&cfg).unwrap())
-    .bind(body.priority.unwrap_or(1))
-    .bind(body.enabled.unwrap_or(true) as i64)
-    .bind(id)
-    .execute(state.db.pool())
-    .await
-    .map_err(ApiError::internal)?;
+    sqlx::query("UPDATE download_clients SET name=?, settings=?, priority=?, enabled=? WHERE id=?")
+        .bind(body.name.trim())
+        .bind(serde_json::to_string(&cfg).unwrap())
+        .bind(body.priority.unwrap_or(1))
+        .bind(body.enabled.unwrap_or(true) as i64)
+        .bind(id)
+        .execute(state.db.pool())
+        .await
+        .map_err(ApiError::internal)?;
     Ok(Json(json!({ "ok": true })))
 }
 

@@ -10,16 +10,15 @@ use std::sync::Arc;
 use crate::auth::AuthUser;
 use crate::error::ApiError;
 use crate::grab;
-use crate::indexers::{self, torznab::{ReleaseResult, SearchQuery}};
+use crate::indexers::{
+    self,
+    torznab::{ReleaseResult, SearchQuery},
+};
 use crate::media;
 use crate::AppState;
 
 /// Score + rank results for the UI so the best pick is on top.
-fn scored(
-    results: Vec<ReleaseResult>,
-    season: Option<u32>,
-    episodes: &[u32],
-) -> Vec<Value> {
+fn scored(results: Vec<ReleaseResult>, season: Option<u32>, episodes: &[u32]) -> Vec<Value> {
     let mut out: Vec<Value> = results
         .into_iter()
         .map(|r| {
@@ -136,7 +135,11 @@ pub async fn search_album_releases(
     .ok_or_else(|| ApiError::not_found("album not found"))?;
     let q = SearchQuery {
         kind: "music".into(),
-        query: format!("{} {}", row.get::<String, _>("artist"), row.get::<String, _>("title")),
+        query: format!(
+            "{} {}",
+            row.get::<String, _>("artist"),
+            row.get::<String, _>("title")
+        ),
         ..Default::default()
     };
     let results = indexers::search_all(&state.db, state.http.clone(), &q).await;

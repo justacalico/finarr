@@ -34,13 +34,12 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
     let engine = state.engine.read().await;
     let torrents = engine.list();
     let engine_settings = settings::get::<EngineSettings>(&state.db, "engine").await?;
-    let paths = settings::get::<PathsSettings>(&state.db, "paths").await?;
+    let paths = settings::get::<PathsSettings>(&state.db, "paths")
+        .await?
+        .resolve(&state.config.data_dir);
     let automation = settings::get::<AutomationSettings>(&state.db, "automation").await?;
-    let notifications = settings::get::<settings::NotificationSettings>(
-        &state.db,
-        "notifications",
-    )
-    .await?;
+    let notifications =
+        settings::get::<settings::NotificationSettings>(&state.db, "notifications").await?;
 
     // Seed ratio enforcement for everything the engine manages.
     if engine_settings.seed_ratio > 0.0 {
@@ -77,7 +76,11 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
             .await;
             continue;
         };
-        let new_state = if t.finished { "completed".to_string() } else { t.state.clone() };
+        let new_state = if t.finished {
+            "completed".to_string()
+        } else {
+            t.state.clone()
+        };
         sqlx::query(
             "UPDATE download_items SET state=?, progress=?, size_bytes=?,
                 save_path=COALESCE(NULLIF(save_path,''), ?)
@@ -103,14 +106,22 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
             });
             let episode_ids: Vec<i64> =
                 serde_json::from_str(&row.get::<String, _>("episode_ids")).unwrap_or_default();
+            let kind = match media_type.as_deref().unwrap_or("") {
+                "movie" => row
+                    .get::<Option<i64>, _>("movie_id")
+                    .map(media::import::ImportKind::Movie),
+                "series" => Some(media::import::ImportKind::Series(episode_ids)),
+                "album" => row
+                    .get::<Option<i64>, _>("album_id")
+                    .map(media::import::ImportKind::Album),
+                _ => None,
+            };
+            let Some(kind) = kind else { continue };
             let outcome = media::import::import(
                 &state.db,
                 &paths,
                 &src,
-                media_type.as_deref().unwrap_or(""),
-                row.get("movie_id"),
-                &episode_ids,
-                row.get("album_id"),
+                kind,
                 &row.get::<String, _>("release_title"),
             )
             .await;
@@ -140,7 +151,7 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
                         &notifications,
                         "import",
                         "Import complete",
-                        &format!("{} — {} file(s)", title, o.imported),
+                        &format!("{}, {} file(s)", title, o.imported),
                     )
                     .await;
                 }
@@ -157,12 +168,10 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
                         )
                         .await;
                     // Do not retry in a hot loop; flag it so the user sees it.
-                    sqlx::query(
-                        "UPDATE download_items SET state='import_failed' WHERE id=?",
-                    )
-                    .bind(item_id)
-                    .execute(state.db.pool())
-                    .await?;
+                    sqlx::query("UPDATE download_items SET state='import_failed' WHERE id=?")
+                        .bind(item_id)
+                        .execute(state.db.pool())
+                        .await?;
                 }
             }
         }
@@ -171,7 +180,11 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
 }
 
 /// Mark matching open requests fulfilled after an import.
-async fn fulfill_requests(db: &crate::db::Db, media_type: &str, row: &sqlx::sqlite::SqliteRow) -> anyhow::Result<()> {
+async fn fulfill_requests(
+    db: &crate::db::Db,
+    media_type: &str,
+    row: &sqlx::sqlite::SqliteRow,
+) -> anyhow::Result<()> {
     let external_id = match media_type {
         "movie" => row
             .try_get::<Option<i64>, _>("movie_id")
@@ -185,7 +198,7 @@ async fn fulfill_requests(db: &crate::db::Db, media_type: &str, row: &sqlx::sqli
             .map(|id| id.to_string()),
         _ => None,
     };
-    if let Some(_) = external_id {
+    if external_id.is_some() {
         // Requests store the provider id, not our row id, so match on the
         // media row's external id where we can.
         if media_type == "movie" {
@@ -215,11 +228,10 @@ async fn monitor_loop(state: Arc<AppState>) {
     let mut last_run = std::time::Instant::now() - Duration::from_secs(3600);
     loop {
         interval.tick().await;
-        let automation: AutomationSettings =
-            match settings::get(&state.db, "automation").await {
-                Ok(a) => a,
-                Err(_) => continue,
-            };
+        let automation: AutomationSettings = match settings::get(&state.db, "automation").await {
+            Ok(a) => a,
+            Err(_) => continue,
+        };
         if !automation.wanted_search_enabled {
             continue;
         }
@@ -241,7 +253,16 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
     let mut grabbed = 0usize;
 
     // --- movies ---
-    let movies: Vec<(i64, String, Option<i64>, Option<String>, Option<String>, Option<String>, String)> = sqlx::query_as(
+    type MovieRow = (
+        i64,
+        String,
+        Option<i64>,
+        Option<String>,
+        Option<String>,
+        Option<String>,
+        String,
+    );
+    let movies: Vec<MovieRow> = sqlx::query_as(
         "SELECT id, title, year, imdb_id, release_date, digital_date, min_availability
            FROM movies WHERE monitored = 1 AND status = 'missing'",
     )
@@ -290,8 +311,9 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
     .bind(&today)
     .fetch_all(db.pool())
     .await?;
-    let mut by_season: std::collections::BTreeMap<(i64, i64), Vec<(i64, i64, String)>> =
-        Default::default();
+    type SeasonKey = (i64, i64);
+    type EpRow = (i64, i64, String);
+    let mut by_season: std::collections::BTreeMap<SeasonKey, Vec<EpRow>> = Default::default();
     for (eid, sid, season, epnum, title) in eps {
         by_season
             .entry((sid, season))
@@ -432,10 +454,7 @@ fn movie_is_available(
 ) -> bool {
     match min_avail {
         "announced" => true,
-        "in_cinemas" => release
-            .as_deref()
-            .map(|d| d <= today)
-            .unwrap_or(false),
+        "in_cinemas" => release.as_deref().map(|d| d <= today).unwrap_or(false),
         // "released": any known date that passed counts; unknown dates stay
         // wanted (indexers will only return what exists anyway).
         _ => match (release, digital) {

@@ -41,8 +41,16 @@ pub async fn all(
     ensure(&mut map, "paths", &settings::PathsSettings::default());
     ensure(&mut map, "engine", &EngineSettings::default());
     ensure(&mut map, "metadata", &settings::MetadataSettings::default());
-    ensure(&mut map, "automation", &settings::AutomationSettings::default());
-    ensure(&mut map, "notifications", &settings::NotificationSettings::default());
+    ensure(
+        &mut map,
+        "automation",
+        &settings::AutomationSettings::default(),
+    );
+    ensure(
+        &mut map,
+        "notifications",
+        &settings::NotificationSettings::default(),
+    );
     Ok(Json(Value::Object(map)))
 }
 

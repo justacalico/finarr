@@ -15,6 +15,8 @@ class MoviesView extends StatelessWidget {
     final s = context.watch<AppState>();
     final width = MediaQuery.sizeOf(context).width;
     final cols = (width / 150).floor().clamp(2, 10);
+    final cardW = (width - (width >= 900 ? 64 : 32) - (cols - 1) * 16) / cols;
+    final cardRatio = cardW / (cardW * 1.5 + 92);
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: s.refreshLibraries,
@@ -56,7 +58,7 @@ class MoviesView extends StatelessWidget {
                     crossAxisCount: cols,
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 16,
-                    childAspectRatio: 0.58,
+                    childAspectRatio: cardRatio,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, i) => _MovieCard(movie: s.movies[i]),
@@ -121,13 +123,16 @@ class _MovieCard extends StatelessWidget {
               style:
                   const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Row(
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: [
               if (movie['year'] != null)
                 Text('${movie['year']}',
                     style: TextStyle(
                         fontSize: 11, color: Theme.of(context).hintColor)),
-              const Spacer(),
               StatusChip(movie['status'] ?? ''),
             ],
           ),

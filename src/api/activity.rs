@@ -12,7 +12,7 @@ use crate::error::ApiError;
 use crate::AppState;
 
 /// Unified queue: engine torrents joined with tracked download_items so
-/// the UI sees "Series S01E02 — 45%" rather than a bare torrent name.
+/// the UI sees "Series S01E02, 45%" rather than a bare torrent name.
 pub async fn queue(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
@@ -116,13 +116,11 @@ pub async fn history(
         .and_then(|v| v.parse::<i64>().ok())
         .unwrap_or(100)
         .clamp(1, 1000);
-    let rows = sqlx::query(
-        "SELECT * FROM history ORDER BY created_at DESC, id DESC LIMIT ?",
-    )
-    .bind(limit)
-    .fetch_all(state.db.pool())
-    .await
-    .map_err(ApiError::internal)?;
+    let rows = sqlx::query("SELECT * FROM history ORDER BY created_at DESC, id DESC LIMIT ?")
+        .bind(limit)
+        .fetch_all(state.db.pool())
+        .await
+        .map_err(ApiError::internal)?;
     let items: Vec<Value> = rows
         .iter()
         .map(|r| {

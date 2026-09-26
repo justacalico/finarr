@@ -1,0 +1,27 @@
+{
+  "name": "Finarr",
+  "identifier": "com.httpanimations.finarr.source",
+  "website": "https://gitlab.com/HttpAnimations/finarr",
+  "apps": [
+    {
+      "name": "Finarr",
+      "bundleIdentifier": "com.httpanimations.finarr",
+      "developerName": "Finarr",
+      "iconURL": "https://httpanimations.gitlab.io/finarr/icon.png",
+      "tintColor": "5E5CE6",
+      "version": "1.0.0",
+      "versionDate": "2026-09-26",
+      "versionDescription": "Nightly build of Finarr for iOS. Unsigned IPA; AltStore re-signs it during install.",
+      "downloadURL": "https://github.com/justacalico/finarr/releases/download/nightly/finarr-ios-arm64-unsigned.ipa",
+      "size": 35000000,
+      "permissions": [
+        {
+          "type": "network",
+          "usageDescription": "Finarr talks to your Finarr server over the network."
+        }
+      ],
+      "screenshots": []
+    }
+  ],
+  "news": []
+}

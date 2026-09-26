@@ -1,5 +1,5 @@
 //! First-run wizard: create the admin account. Only usable while the
-//! users table is empty — afterwards it is permanently locked.
+//! users table is empty, afterwards it is permanently locked.
 
 use axum::extract::State;
 use axum::Json;
@@ -33,7 +33,9 @@ pub async fn setup(
         return Err(ApiError::bad_request("username required"));
     }
     if body.password.len() < 8 {
-        return Err(ApiError::bad_request("password must be at least 8 characters"));
+        return Err(ApiError::bad_request(
+            "password must be at least 8 characters",
+        ));
     }
     let hash = password::hash_password(&body.password).map_err(ApiError::internal)?;
     let row = sqlx::query(
@@ -42,7 +44,11 @@ pub async fn setup(
     )
     .bind(body.username.trim())
     .bind(hash)
-    .bind(body.display_name.clone().unwrap_or_else(|| body.username.clone()))
+    .bind(
+        body.display_name
+            .clone()
+            .unwrap_or_else(|| body.username.clone()),
+    )
     .fetch_one(state.db.pool())
     .await
     .map_err(ApiError::internal)?;

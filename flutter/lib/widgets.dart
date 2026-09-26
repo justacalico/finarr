@@ -22,7 +22,7 @@ String fmtBytes(num bytes, {int decimals = 1}) {
 String fmtSpeed(num bytesPerSec) => '${fmtBytes(bytesPerSec)}/s';
 
 String fmtEta(num? seconds) {
-  if (seconds == null || seconds <= 0 || seconds >= 864000) return '—';
+  if (seconds == null || seconds <= 0 || seconds >= 864000) return '-';
   final d = Duration(seconds: seconds.toInt());
   if (d.inDays > 0) return '${d.inDays}d ${d.inHours % 24}h';
   if (d.inHours > 0) return '${d.inHours}h ${d.inMinutes % 60}m';
@@ -31,14 +31,14 @@ String fmtEta(num? seconds) {
 }
 
 String fmtDate(String? iso) {
-  if (iso == null || iso.isEmpty) return '—';
+  if (iso == null || iso.isEmpty) return '-';
   final d = DateTime.tryParse(iso);
   if (d == null) return iso;
   return DateFormat.yMMMd().format(d.toLocal());
 }
 
 String fmtDateTime(String? iso) {
-  if (iso == null || iso.isEmpty) return '—';
+  if (iso == null || iso.isEmpty) return '-';
   final d = DateTime.tryParse(iso);
   if (d == null) return iso;
   return DateFormat.yMMMd().add_Hm().format(d.toLocal());

@@ -66,10 +66,16 @@ class _QueueItem extends StatelessWidget {
                 StatusChip(item['state'] ?? ''),
                 const SizedBox(width: 8),
                 if (item['indexer'] != '')
-                  Text(item['indexer'],
-                      style: TextStyle(
-                          fontSize: 11, color: Theme.of(context).hintColor)),
-                const Spacer(),
+                  Flexible(
+                    child: Text(item['indexer'],
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                            fontSize: 11,
+                            color: Theme.of(context).hintColor)),
+                  )
+                else
+                  const Spacer(),
                 Text(fmtBytes(item['size_bytes'] ?? 0),
                     style: TextStyle(
                         fontSize: 11, color: Theme.of(context).hintColor)),
@@ -95,17 +101,16 @@ class _QueueItem extends StatelessWidget {
                 const SizedBox(width: 12),
                 Text(fmtPct((item['progress'] ?? 0).toDouble()),
                     style: const TextStyle(fontSize: 12)),
-                if (live != null) ...[
-                  const SizedBox(width: 12),
-                  Text('↓ ${fmtSpeed(speed)}',
-                      style: const TextStyle(fontSize: 11, color: F.info)),
-                  const SizedBox(width: 8),
-                  Text('ETA ${fmtEta(live['eta_seconds'])}',
-                      style: TextStyle(
-                          fontSize: 11, color: Theme.of(context).hintColor)),
-                ],
               ],
             ),
+            if (live != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  '↓ ${fmtSpeed(speed)}  ·  ETA ${fmtEta(live['eta_seconds'])}',
+                  style: const TextStyle(fontSize: 11, color: F.info),
+                ),
+              ),
           ],
         ),
       ),

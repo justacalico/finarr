@@ -1,4 +1,4 @@
-//! TVmaze client — free series metadata + full episode lists, no key.
+//! TVmaze client, free series metadata + full episode lists, no key.
 
 use anyhow::{Context, Result};
 use serde::Deserialize;
@@ -107,11 +107,7 @@ fn to_result(s: Show) -> SeriesResult {
                     season: ep.season,
                     number: ep.number.unwrap_or(0),
                     title: ep.name.clone().unwrap_or_default(),
-                    overview: ep
-                        .summary
-                        .as_deref()
-                        .map(strip_html)
-                        .unwrap_or_default(),
+                    overview: ep.summary.as_deref().map(strip_html).unwrap_or_default(),
                     air_date: ep.airdate.clone(),
                     runtime_min: ep.runtime,
                 });

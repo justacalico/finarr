@@ -45,11 +45,42 @@ pub struct PathsSettings {
 impl Default for PathsSettings {
     fn default() -> Self {
         Self {
-            downloads_dir: "data/downloads".into(),
-            movies_root: "data/library/movies".into(),
-            series_root: "data/library/series".into(),
-            music_root: "data/library/music".into(),
+            downloads_dir: String::new(),
+            movies_root: String::new(),
+            series_root: String::new(),
+            music_root: String::new(),
             import_mode: "hardlink".into(),
+        }
+    }
+}
+
+impl PathsSettings {
+    /// Resolve configured paths to absolute ones: empty values get sensible
+    /// defaults under the data dir, relative paths are joined to it, and
+    /// absolute paths pass through untouched.
+    pub fn resolve(&self, data_dir: &std::path::Path) -> Self {
+        fn p(data_dir: &std::path::Path, configured: &str, fallback: &str) -> String {
+            let path = std::path::Path::new(if configured.is_empty() {
+                fallback
+            } else {
+                configured
+            });
+            if path.is_absolute() {
+                path.to_string_lossy().into_owned()
+            } else {
+                data_dir.join(path).to_string_lossy().into_owned()
+            }
+        }
+        Self {
+            downloads_dir: p(data_dir, &self.downloads_dir, "downloads"),
+            movies_root: p(data_dir, &self.movies_root, "library/movies"),
+            series_root: p(data_dir, &self.series_root, "library/series"),
+            music_root: p(data_dir, &self.music_root, "library/music"),
+            import_mode: if self.import_mode.is_empty() {
+                "hardlink".into()
+            } else {
+                self.import_mode.clone()
+            },
         }
     }
 }

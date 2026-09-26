@@ -270,7 +270,7 @@ class _SeriesDetailViewState extends State<SeriesDetailView> {
               onPressed: () => ReleaseSearchSheet.show(
                 context,
                 title:
-                    'S${ep['season_number'].toString().padLeft(2, '0')}E${ep['episode_number'].toString().padLeft(2, '0')} — ${ep['title']}',
+                    'S${ep['season_number'].toString().padLeft(2, '0')}E${ep['episode_number'].toString().padLeft(2, '0')} · ${ep['title']}',
                 searchPath: '/api/episodes/${ep['id']}/search',
                 grabBody: {
                   'media_type': 'series',

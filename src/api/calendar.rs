@@ -17,15 +17,15 @@ pub async fn calendar(
     Query(params): Query<HashMap<String, String>>,
 ) -> Result<Json<Value>, ApiError> {
     let today = crate::media::today();
-    let start = params.get("start").cloned().unwrap_or_else(|| today.clone());
-    let end = params
-        .get("end")
+    let start = params
+        .get("start")
         .cloned()
-        .unwrap_or_else(|| {
-            (chrono::Utc::now() + chrono::Duration::days(30))
-                .format("%Y-%m-%d")
-                .to_string()
-        });
+        .unwrap_or_else(|| today.clone());
+    let end = params.get("end").cloned().unwrap_or_else(|| {
+        (chrono::Utc::now() + chrono::Duration::days(30))
+            .format("%Y-%m-%d")
+            .to_string()
+    });
 
     let episodes: Vec<Value> = sqlx::query(
         "SELECT e.id, e.season_number, e.episode_number, e.title, e.air_date,
@@ -71,7 +71,7 @@ pub async fn calendar(
     .iter()
     .flat_map(|r| {
         let mut out = Vec::new();
-        if let Some(d) = r.get::<Option<String>,_>("release_date") {
+        if let Some(d) = r.get::<Option<String>, _>("release_date") {
             out.push(json!({
                 "kind": "movie", "subtype": "cinema", "date": d,
                 "id": r.get::<i64,_>("id"),
@@ -81,7 +81,7 @@ pub async fn calendar(
                 "poster_url": r.get::<Option<String>,_>("poster_url"),
             }));
         }
-        if let Some(d) = r.get::<Option<String>,_>("digital_date") {
+        if let Some(d) = r.get::<Option<String>, _>("digital_date") {
             out.push(json!({
                 "kind": "movie", "subtype": "digital", "date": d,
                 "id": r.get::<i64,_>("id"),
@@ -111,7 +111,7 @@ pub async fn calendar(
         json!({
             "kind": "album", "date": r.get::<String,_>("release_date"),
             "id": r.get::<i64,_>("id"),
-            "title": format!("{} — {}", r.get::<String,_>("artist"), r.get::<String,_>("title")),
+            "title": format!("{}, {}", r.get::<String,_>("artist"), r.get::<String,_>("title")),
             "status": r.get::<String,_>("status"),
         })
     })

@@ -9,11 +9,15 @@ import 'api.dart';
 /// every view reads through it and refreshes through it. Layout changes
 /// must never recreate it.
 class AppState extends ChangeNotifier {
-  AppState() {
-    _init();
+  AppState({Api? api, bool autostart = true})
+      : api = api ?? Api(),
+        super() {
+    if (autostart) {
+      _init();
+    }
   }
 
-  final api = Api();
+  final Api api;
 
   // ---------------- boot / auth ----------------
   bool booted = false;

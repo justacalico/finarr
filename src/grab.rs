@@ -151,7 +151,9 @@ pub async fn grab(
     db.record_history(
         "grabbed",
         media_type,
-        movie_id.or(album_id).or_else(|| episode_ids.first().copied()),
+        movie_id
+            .or(album_id)
+            .or_else(|| episode_ids.first().copied()),
         &release.title,
         serde_json::json!({
             "release": release.title,

@@ -1,5 +1,5 @@
 //! Push notifications: ntfy.sh, Discord webhooks, Gotify, or a generic
-//! JSON webhook. Failures are logged and swallowed — notifications must
+//! JSON webhook. Failures are logged and swallowed, notifications must
 //! never break the pipeline.
 
 use serde_json::json;
@@ -21,7 +21,7 @@ pub async fn send(
         "ntfy" => {
             http.post(&cfg.url)
                 .header("Title", title)
-                .header("Priority", cfg.priority.max(1).min(5).to_string())
+                .header("Priority", cfg.priority.clamp(1, 5).to_string())
                 .header("Tags", event)
                 .body(body.to_string())
                 .send()

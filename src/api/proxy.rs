@@ -42,12 +42,12 @@ pub async fn image(
     }
     let resp = match state.http.get(parsed).send().await {
         Ok(r) => r,
-        Err(e) => {
-            return Err(Json(json!({"error": format!("fetch failed: {e}")})))
-        }
+        Err(e) => return Err(Json(json!({"error": format!("fetch failed: {e}")}))),
     };
     if !resp.status().is_success() {
-        return Err(Json(json!({"error": format!("upstream {}", resp.status())})));
+        return Err(Json(
+            json!({"error": format!("upstream {}", resp.status())}),
+        ));
     }
     let content_type = resp
         .headers()

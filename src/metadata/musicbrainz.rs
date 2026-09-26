@@ -1,4 +1,4 @@
-//! MusicBrainz client — artists + release groups. Free, no key.
+//! MusicBrainz client, artists + release groups. Free, no key.
 //! MusicBrainz rate limits to ~1 req/sec; all calls are serialized
 //! through a shared limiter.
 

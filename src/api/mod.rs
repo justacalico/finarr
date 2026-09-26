@@ -38,7 +38,10 @@ pub fn router() -> Router<Arc<AppState>> {
         .route("/users/{id}/apikey", post(users::create_apikey))
         // settings
         .route("/settings", get(settings::all))
-        .route("/settings/{section}", get(settings::get_one).put(settings::put))
+        .route(
+            "/settings/{section}",
+            get(settings::get_one).put(settings::put),
+        )
         .route("/settings/engine/restart", post(settings::restart_engine))
         // indexers
         .route("/indexers", get(indexers::list).post(indexers::create))
@@ -51,33 +54,69 @@ pub fn router() -> Router<Arc<AppState>> {
         // download clients
         .route("/clients", get(clients::list).post(clients::create))
         .route("/clients/test", post(clients::test_new))
-        .route("/clients/{id}", put(clients::update).delete(clients::remove))
+        .route(
+            "/clients/{id}",
+            put(clients::update).delete(clients::remove),
+        )
         .route("/clients/{id}/test", post(clients::test))
         // torrents
         .route("/torrents", get(torrents::list).post(torrents::add))
         .route("/torrents/file", post(torrents::add_file))
         .route("/torrents/limits", put(torrents::set_limits))
-        .route("/torrents/{id}", get(torrents::one).delete(torrents::remove))
+        .route(
+            "/torrents/{id}",
+            get(torrents::one).delete(torrents::remove),
+        )
         .route("/torrents/{id}/files", get(torrents::files))
         .route("/torrents/{id}/only-files", put(torrents::set_only_files))
         .route("/torrents/{id}/pause", post(torrents::pause))
         .route("/torrents/{id}/resume", post(torrents::resume))
         // library: movies
-        .route("/movies", get(library::list_movies).post(library::add_movie))
-        .route("/movies/{id}", get(library::get_movie).put(library::update_movie).delete(library::delete_movie))
+        .route(
+            "/movies",
+            get(library::list_movies).post(library::add_movie),
+        )
+        .route(
+            "/movies/{id}",
+            get(library::get_movie)
+                .put(library::update_movie)
+                .delete(library::delete_movie),
+        )
         .route("/movies/{id}/search", post(releases::search_movie_releases))
         // library: series
-        .route("/series", get(library::list_series).post(library::add_series))
-        .route("/series/{id}", get(library::get_series).put(library::update_series).delete(library::delete_series))
+        .route(
+            "/series",
+            get(library::list_series).post(library::add_series),
+        )
+        .route(
+            "/series/{id}",
+            get(library::get_series)
+                .put(library::update_series)
+                .delete(library::delete_series),
+        )
         .route("/series/{id}/episodes", get(library::series_episodes))
         .route("/series/{id}/refresh", post(library::refresh_series))
-        .route("/series/{id}/search", post(releases::search_series_releases))
+        .route(
+            "/series/{id}/search",
+            post(releases::search_series_releases),
+        )
         .route("/seasons/{id}/monitor", put(library::set_season_monitored))
         .route("/episodes/{id}", patch(library::update_episode))
-        .route("/episodes/{id}/search", post(releases::search_episode_releases))
+        .route(
+            "/episodes/{id}/search",
+            post(releases::search_episode_releases),
+        )
         // library: music
-        .route("/artists", get(library::list_artists).post(library::add_artist))
-        .route("/artists/{id}", get(library::get_artist).put(library::update_artist).delete(library::delete_artist))
+        .route(
+            "/artists",
+            get(library::list_artists).post(library::add_artist),
+        )
+        .route(
+            "/artists/{id}",
+            get(library::get_artist)
+                .put(library::update_artist)
+                .delete(library::delete_artist),
+        )
         .route("/artists/{id}/albums", get(library::artist_albums))
         .route("/albums/{id}", patch(library::update_album))
         .route("/albums/{id}/search", post(releases::search_album_releases))

@@ -305,7 +305,7 @@ class _IndexersSectionState extends State<_IndexersSection> {
       children: [
         SectionHeader('Indexers',
             subtitle:
-                'Torznab endpoints — Jackett, Prowlarr, or any compatible tracker',
+                'Torznab endpoints: Jackett, Prowlarr, or any compatible tracker',
             trailing: FilledButton.icon(
                 onPressed: () => _edit(context, null),
                 icon: const Icon(Icons.add, size: 18),
@@ -468,7 +468,7 @@ class _IndexerDialogState extends State<_IndexerDialog> {
                         '/api/indexers/test',
                         {'name': _name.text, 'url': _url.text, 'api_key': _key.text});
                     setState(() => _testResult = r['ok'] == true
-                        ? 'OK — caps retrieved'
+                        ? 'OK, caps retrieved'
                         : 'Failed: ${r['error']}');
                   } catch (e) {
                     setState(() => _testResult = '$e');
@@ -589,7 +589,7 @@ class _ClientTile extends StatelessWidget {
                 snack(
                     context,
                     r['ok'] == true
-                        ? 'Connected — ${r['torrents']} torrents'
+                        ? 'Connected, ${r['torrents']} torrents'
                         : 'Failed: ${r['error']}',
                     error: r['ok'] != true);
               }
@@ -706,7 +706,7 @@ class _ClientDialogState extends State<_ClientDialog> {
                         '/api/clients/test',
                         _body());
                     setState(() => _testResult = r['ok'] == true
-                        ? 'OK — connected'
+                        ? 'OK, connected'
                         : 'Failed: ${r['error']}');
                   } catch (e) {
                     setState(() => _testResult = '$e');

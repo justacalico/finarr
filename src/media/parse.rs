@@ -1,9 +1,9 @@
 //! Release-name parsing: quality, resolution, season/episode numbers,
-//! year, release group — everything needed to match indexer results to
+//! year, release group, everything needed to match indexer results to
 //! wanted media.
 
-use std::sync::LazyLock;
 use regex::Regex;
+use std::sync::LazyLock;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct ParsedRelease {
@@ -25,14 +25,16 @@ pub struct ParsedRelease {
 static RE_SEASON_EP: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)(?:^|[.\s_\-\[\(])s(\d{1,2})e(\d{1,3})(?:-?e?(\d{1,3}))?").unwrap()
 });
-static RE_XEP: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?i)(?:^|[.\s_\-\[\(])(\d{1,2})x(\d{1,3})(?:-(\d{1,3}))?").unwrap());
+static RE_XEP: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?i)(?:^|[.\s_\-\[\(])(\d{1,2})x(\d{1,3})(?:-(\d{1,3}))?").unwrap()
+});
 static RE_SEASON_PACK: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r"(?i)(?:^|[.\s_\-\[\(])(?:s(\d{1,2})|season[.\s_]*(\d{1,2}))(?:[.\s_\-\]\)]|$)")
         .unwrap()
 });
-static RE_YEAR: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"(?:^|[.\s_\-\[\(])(19\d{2}|20[0-4]\d)(?:[.\s_\-\]\)]|$)").unwrap());
+static RE_YEAR: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r"(?:^|[.\s_\-\[\(])(19\d{2}|20[0-4]\d)(?:[.\s_\-\]\)]|$)").unwrap()
+});
 static RE_RES: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"(?i)(?:^|[.\s_\-\[\]])(2160p|1080p|720p|480p|360p)").unwrap());
 static RE_SOURCE: LazyLock<Regex> = LazyLock::new(|| {
@@ -89,8 +91,8 @@ pub fn parse_release(title: &str) -> ParsedRelease {
     // A release can carry several source tags ("BluRay REMUX"); keep the
     // most specific one by priority.
     const PRIORITY: &[&str] = &[
-        "REMUX", "BluRay", "BDRip", "WEB-DL", "BRRip", "WEBRip", "HDTV",
-        "DVDRip", "FLAC", "Vinyl", "MP3", "AAC", "CAM",
+        "REMUX", "BluRay", "BDRip", "WEB-DL", "BRRip", "WEBRip", "HDTV", "DVDRip", "FLAC", "Vinyl",
+        "MP3", "AAC", "CAM",
     ];
     let mut best: Option<(usize, String)> = None;
     for m in RE_SOURCE.find_iter(title) {
@@ -131,7 +133,7 @@ fn normalize_source(s: &str) -> String {
 }
 
 /// A rough quality rank: higher is better. Used when no explicit
-/// preference is configured — picks the best plausible release.
+/// preference is configured, picks the best plausible release.
 pub fn quality_rank(p: &ParsedRelease) -> i64 {
     let mut score = 0i64;
     score += match p.resolution {
@@ -169,8 +171,7 @@ pub fn matches_episode(p: &ParsedRelease, season: u32, episodes: &[u32]) -> bool
     if p.season_pack {
         return true;
     }
-    episodes.iter().all(|e| p.episodes.contains(e))
-        && !p.episodes.is_empty()
+    episodes.iter().all(|e| p.episodes.contains(e)) && !p.episodes.is_empty()
 }
 
 #[cfg(test)]

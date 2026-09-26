@@ -14,6 +14,8 @@ class SeriesView extends StatelessWidget {
     final s = context.watch<AppState>();
     final width = MediaQuery.sizeOf(context).width;
     final cols = (width / 150).floor().clamp(2, 10);
+    final cardW = (width - (width >= 900 ? 64 : 32) - (cols - 1) * 16) / cols;
+    final cardRatio = cardW / (cardW * 1.5 + 92);
     return Scaffold(
       body: RefreshIndicator(
         onRefresh: s.refreshLibraries,
@@ -54,7 +56,7 @@ class SeriesView extends StatelessWidget {
                     crossAxisCount: cols,
                     mainAxisSpacing: 16,
                     crossAxisSpacing: 16,
-                    childAspectRatio: 0.58,
+                    childAspectRatio: cardRatio,
                   ),
                   delegate: SliverChildBuilderDelegate(
                     (context, i) => _SeriesCard(series: s.seriesList[i]),
@@ -107,23 +109,17 @@ class _SeriesCard extends StatelessWidget {
           const SizedBox(height: 4),
           Row(
             children: [
-              if (series['year'] != null)
-                Text('${series['year']}',
-                    style: TextStyle(
-                        fontSize: 11, color: Theme.of(context).hintColor)),
-              if (series['network'] != null) ...[
-                Text(' · ',
-                    style: TextStyle(
-                        fontSize: 11, color: Theme.of(context).hintColor)),
-                Expanded(
-                  child: Text('${series['network']}',
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontSize: 11, color: Theme.of(context).hintColor)),
+              Flexible(
+                child: Text(
+                  '${series['year'] ?? ''}${series['network'] != null ? ' · ${series['network']}' : ''}'
+                      .trim(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontSize: 11, color: Theme.of(context).hintColor),
                 ),
-              ] else
-                const Spacer(),
+              ),
+              const SizedBox(width: 4),
               StatusChip(series['series_status'] == 'continuing'
                   ? 'continuing'
                   : series['series_status'] ?? ''),

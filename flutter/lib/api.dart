@@ -8,8 +8,10 @@ import 'package:http/http.dart' as http;
 class Api {
   String baseUrl;
   String? token;
+  final http.Client client;
 
-  Api({this.baseUrl = '', this.token});
+  Api({this.baseUrl = '', this.token, http.Client? client})
+      : client = client ?? http.Client();
 
   Uri _u(String path, [Map<String, String>? q]) {
     final qp = (q == null || q.isEmpty) ? null : q;
@@ -39,34 +41,34 @@ class Api {
   }
 
   Future<dynamic> get(String path, [Map<String, String>? q]) async {
-    final r = await http.get(_u(path, q), headers: _headers);
+    final r = await client.get(_u(path, q), headers: _headers);
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> post(String path, [Object? body]) async {
-    final r = await http.post(_u(path),
+    final r = await client.post(_u(path),
         headers: _headers, body: body == null ? null : jsonEncode(body));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> put(String path, [Object? body]) async {
-    final r = await http.put(_u(path),
+    final r = await client.put(_u(path),
         headers: _headers, body: body == null ? null : jsonEncode(body));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> patch(String path, [Object? body]) async {
-    final r = await http.patch(_u(path),
+    final r = await client.patch(_u(path),
         headers: _headers, body: body == null ? null : jsonEncode(body));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> delete(String path, [Map<String, String>? q]) async {
-    final r = await http.delete(_u(path, q), headers: _headers);
+    final r = await client.delete(_u(path, q), headers: _headers);
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }

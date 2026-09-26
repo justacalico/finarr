@@ -47,11 +47,13 @@ pub async fn login(
         ));
     }
     let user_id: i64 = row.get("id");
-    sqlx::query("UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?")
-        .bind(user_id)
-        .execute(state.db.pool())
-        .await
-        .ok();
+    sqlx::query(
+        "UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
+    )
+    .bind(user_id)
+    .execute(state.db.pool())
+    .await
+    .ok();
     let token = auth::create_session(&state.db, user_id, "web session", "session", Some(90))
         .await
         .map_err(ApiError::internal)?;
@@ -107,7 +109,9 @@ pub async fn change_password(
     Json(body): Json<PasswordBody>,
 ) -> Result<Json<Value>, ApiError> {
     if body.new_password.len() < 8 {
-        return Err(ApiError::bad_request("password must be at least 8 characters"));
+        return Err(ApiError::bad_request(
+            "password must be at least 8 characters",
+        ));
     }
     let row = sqlx::query("SELECT password_hash FROM users WHERE id = ?")
         .bind(user.id)

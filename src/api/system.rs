@@ -47,10 +47,7 @@ pub fn mark_start() {
     let _ = START.set(chrono::Utc::now());
 }
 
-pub async fn info(
-    _user: AuthUser,
-    State(state): State<Arc<AppState>>,
-) -> Json<InfoOut> {
+pub async fn info(_user: AuthUser, State(state): State<Arc<AppState>>) -> Json<InfoOut> {
     let sqlite_version = sqlx::query_scalar::<_, String>("SELECT sqlite_version()")
         .fetch_one(state.db.pool())
         .await
@@ -87,10 +84,7 @@ pub struct DiskInfo {
     pub free_bytes: u64,
 }
 
-pub async fn disk(
-    _user: AuthUser,
-    State(state): State<Arc<AppState>>,
-) -> Json<Vec<DiskInfo>> {
+pub async fn disk(_user: AuthUser, State(state): State<Arc<AppState>>) -> Json<Vec<DiskInfo>> {
     let paths = settings::get::<settings::PathsSettings>(&state.db, "paths")
         .await
         .unwrap_or_default();

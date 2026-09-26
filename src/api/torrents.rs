@@ -10,10 +10,7 @@ use crate::auth::AuthUser;
 use crate::error::ApiError;
 use crate::AppState;
 
-pub async fn list(
-    _user: AuthUser,
-    State(state): State<Arc<AppState>>,
-) -> Json<Value> {
+pub async fn list(_user: AuthUser, State(state): State<Arc<AppState>>) -> Json<Value> {
     let engine = state.engine.read().await;
     let items = engine.list();
     let (mut dl, mut ul) = (0u64, 0u64);
@@ -110,9 +107,22 @@ pub async fn add_file(
     let mut paused = false;
     while let Ok(Some(field)) = multipart.next_field().await {
         match field.name().unwrap_or("") {
-            "torrent" => file = Some(field.bytes().await.map_err(|_| ApiError::bad_request("bad file"))?),
+            "torrent" => {
+                file = Some(
+                    field
+                        .bytes()
+                        .await
+                        .map_err(|_| ApiError::bad_request("bad file"))?,
+                )
+            }
             "category" => category = field.text().await.unwrap_or_default(),
-            "paused" => paused = field.text().await.map(|t| t == "true" || t == "1").unwrap_or(false),
+            "paused" => {
+                paused = field
+                    .text()
+                    .await
+                    .map(|t| t == "true" || t == "1")
+                    .unwrap_or(false)
+            }
             _ => {}
         }
     }

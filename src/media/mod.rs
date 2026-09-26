@@ -118,8 +118,8 @@ pub struct MediaFile {
 
 fn sort_title(title: &str) -> String {
     for art in ["The ", "A ", "An "] {
-        if title.starts_with(art) {
-            return format!("{}, {}", &title[art.len()..], &art[..art.len() - 1]);
+        if let Some(rest) = title.strip_prefix(art) {
+            return format!("{}, {}", rest, &art[..art.len() - 1]);
         }
     }
     title.to_string()
@@ -208,12 +208,14 @@ pub async fn delete_movie(db: &Db, id: i64, delete_files: bool) -> Result<()> {
 }
 
 pub async fn movie_files(db: &Db, movie_id: i64) -> Result<Vec<MediaFile>> {
-    Ok(sqlx::query_as::<_, MediaFile>(
-        "SELECT * FROM media_files WHERE movie_id = ? ORDER BY path",
+    Ok(
+        sqlx::query_as::<_, MediaFile>(
+            "SELECT * FROM media_files WHERE movie_id = ? ORDER BY path",
+        )
+        .bind(movie_id)
+        .fetch_all(db.pool())
+        .await?,
     )
-    .bind(movie_id)
-    .fetch_all(db.pool())
-    .await?)
 }
 
 // ------------------------------ series ------------------------------
@@ -301,8 +303,7 @@ pub async fn add_series(
     let series_id: i64 = row.get("id");
 
     for season in &s.seasons {
-        let monitored_season = season_filter.is_empty()
-            || season_filter.contains(&season.number);
+        let monitored_season = season_filter.is_empty() || season_filter.contains(&season.number);
         sqlx::query("INSERT INTO seasons (series_id, season_number, monitored) VALUES (?, ?, ?)")
             .bind(series_id)
             .bind(season.number as i64)
@@ -339,11 +340,7 @@ pub async fn add_series(
 }
 
 /// Re-pull provider metadata for a series and upsert new episodes.
-pub async fn refresh_series(
-    db: &Db,
-    http: &reqwest::Client,
-    series_id: i64,
-) -> Result<usize> {
+pub async fn refresh_series(db: &Db, http: &reqwest::Client, series_id: i64) -> Result<usize> {
     let s = get_series(db, series_id).await?;
     let tvmaze_id = s
         .tvmaze_id
@@ -367,14 +364,13 @@ pub async fn refresh_series(
 
     let mut added = 0usize;
     for season in &fresh.seasons {
-        let season_row: Option<i64> = sqlx::query(
-            "SELECT monitored FROM seasons WHERE series_id=? AND season_number=?",
-        )
-        .bind(series_id)
-        .bind(season.number as i64)
-        .fetch_optional(db.pool())
-        .await?
-        .map(|r| r.get::<i64, _>("monitored"));
+        let season_row: Option<i64> =
+            sqlx::query("SELECT monitored FROM seasons WHERE series_id=? AND season_number=?")
+                .bind(series_id)
+                .bind(season.number as i64)
+                .fetch_optional(db.pool())
+                .await?
+                .map(|r| r.get::<i64, _>("monitored"));
         let season_monitored = match season_row {
             Some(m) => m != 0,
             None => {
@@ -404,7 +400,7 @@ pub async fn refresh_series(
             .fetch_optional(db.pool())
             .await?
             .map(|r| r.get::<i64, _>("id"));
-            if exists.is_some() {
+            if let Some(ep_id) = exists {
                 sqlx::query(
                     "UPDATE episodes SET title=?, overview=?, air_date=?, runtime_min=? WHERE id=?",
                 )
@@ -412,7 +408,7 @@ pub async fn refresh_series(
                 .bind(&ep.overview)
                 .bind(&ep.air_date)
                 .bind(ep.runtime_min)
-                .bind(exists.unwrap())
+                .bind(ep_id)
                 .execute(db.pool())
                 .await?;
             } else {
@@ -452,7 +448,12 @@ pub async fn refresh_series(
     Ok(added)
 }
 
-pub async fn set_season_monitored(db: &Db, series_id: i64, season: i64, monitored: bool) -> Result<()> {
+pub async fn set_season_monitored(
+    db: &Db,
+    series_id: i64,
+    season: i64,
+    monitored: bool,
+) -> Result<()> {
     sqlx::query("UPDATE seasons SET monitored=? WHERE series_id=? AND season_number=?")
         .bind(monitored as i64)
         .bind(series_id)

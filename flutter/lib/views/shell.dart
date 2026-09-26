@@ -138,21 +138,55 @@ class _ShellViewState extends State<ShellView> {
       bottomNavigationBar: wide
           ? null
           : NavigationBar(
-              selectedIndex: _index,
-              onDestinationSelected: (i) => setState(() => _index = i),
+              // 5 primary sections + a More sheet for the rest; ten bare
+              // destinations do not fit a phone-width bar.
+              selectedIndex: _index <= 4 ? _index : 5,
+              onDestinationSelected: (i) {
+                if (i < 5) {
+                  setState(() => _index = i);
+                } else {
+                  _showMoreSheet(context);
+                }
+              },
               destinations: [
-                for (var i = 0; i < _sections.length; i++)
+                for (var i = 0; i < 5; i++)
                   NavigationDestination(
-                    icon: Badge.count(
-                      count: i == 5 && s.isAdmin ? pending : 0,
-                      isLabelVisible: i == 5 && s.isAdmin && pending > 0,
-                      child: Icon(_sections[i].$2),
-                    ),
+                    icon: Icon(_sections[i].$2),
                     selectedIcon: Icon(_sections[i].$3),
                     label: _sections[i].$1,
                   ),
+                NavigationDestination(
+                  icon: Badge.count(
+                    count: s.isAdmin ? pending : 0,
+                    isLabelVisible: s.isAdmin && pending > 0,
+                    child: const Icon(Icons.more_horiz),
+                  ),
+                  label: 'More',
+                ),
               ],
             ),
+    );
+  }
+
+  void _showMoreSheet(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      showDragHandle: true,
+      builder: (c) => SafeArea(
+        child: Wrap(
+          children: [
+            for (var i = 5; i < _sections.length; i++)
+              ListTile(
+                leading: Icon(_sections[i].$2),
+                title: Text(_sections[i].$1),
+                onTap: () {
+                  setState(() => _index = i);
+                  Navigator.pop(c);
+                },
+              ),
+          ],
+        ),
+      ),
     );
   }
 }

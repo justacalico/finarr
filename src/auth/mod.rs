@@ -55,8 +55,16 @@ async fn lookup_token(db: &Db, token: &str) -> Result<Option<AuthUser>, sqlx::Er
     if row.get::<i64, _>("disabled") != 0 {
         return Ok(None);
     }
-    if let Some(exp) = row.try_get::<Option<String>, _>("expires_at").ok().flatten() {
-        if exp <= chrono::Utc::now().format("%Y-%m-%dT%H:%M:%S%.3fZ").to_string() {
+    if let Some(exp) = row
+        .try_get::<Option<String>, _>("expires_at")
+        .ok()
+        .flatten()
+    {
+        if exp
+            <= chrono::Utc::now()
+                .format("%Y-%m-%dT%H:%M:%S%.3fZ")
+                .to_string()
+        {
             return Ok(None);
         }
     }

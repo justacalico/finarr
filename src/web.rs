@@ -21,7 +21,10 @@ fn serve_file(path: &str) -> Option<Response> {
     Some(
         (
             [
-                (header::CONTENT_TYPE, HeaderValue::from_str(mime.as_ref()).ok()?),
+                (
+                    header::CONTENT_TYPE,
+                    HeaderValue::from_str(mime.as_ref()).ok()?,
+                ),
                 (header::CACHE_CONTROL, HeaderValue::from_static(cache)),
             ],
             file.contents(),
@@ -34,8 +37,7 @@ pub async fn static_handler(Path(path): Path<String>) -> Response {
     match serve_file(&path) {
         Some(r) => r,
         // SPA fallback: unknown non-file paths render the app shell.
-        None => serve_file("index.html")
-            .unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()),
+        None => serve_file("index.html").unwrap_or_else(|| StatusCode::NOT_FOUND.into_response()),
     }
 }
 

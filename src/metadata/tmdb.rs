@@ -1,4 +1,4 @@
-//! TMDB v3 API client — movies (and optionally series) metadata.
+//! TMDB v3 API client, movies (and optionally series) metadata.
 //! Requires an API key configured in Settings > Metadata.
 
 use anyhow::{bail, Context, Result};
@@ -81,7 +81,11 @@ impl From<SearchMovie> for MovieResult {
         MovieResult {
             tmdb_id: m.id,
             imdb_id: None,
-            title: m.title.clone().or(m.original_title.clone()).unwrap_or_default(),
+            title: m
+                .title
+                .clone()
+                .or(m.original_title.clone())
+                .unwrap_or_default(),
             original_title: m.original_title,
             year: year_of(&m.release_date),
             overview: m.overview.unwrap_or_default(),
@@ -95,7 +99,11 @@ impl From<SearchMovie> for MovieResult {
     }
 }
 
-pub async fn search_movie(http: &reqwest::Client, api_key: &str, query: &str) -> Result<Vec<MovieResult>> {
+pub async fn search_movie(
+    http: &reqwest::Client,
+    api_key: &str,
+    query: &str,
+) -> Result<Vec<MovieResult>> {
     let resp: SearchResponse = http
         .get(format!("{BASE}/search/movie"))
         .query(&[
@@ -128,13 +136,14 @@ fn digital_date(d: &MovieDetails) -> Option<String> {
                     .map(|r| r.release_date.chars().take(10).collect::<String>())
             })
     };
-    pick("US")
-        .or_else(|| rd.results.iter().find_map(|c| {
+    pick("US").or_else(|| {
+        rd.results.iter().find_map(|c| {
             c.release_dates
                 .iter()
                 .find(|r| r.kind == 4)
                 .map(|r| r.release_date.chars().take(10).collect::<String>())
-        }))
+        })
+    })
 }
 
 pub async fn movie(http: &reqwest::Client, api_key: &str, tmdb_id: i64) -> Result<MovieResult> {
@@ -155,7 +164,11 @@ pub async fn movie(http: &reqwest::Client, api_key: &str, tmdb_id: i64) -> Resul
     Ok(MovieResult {
         tmdb_id: d.id,
         imdb_id: d.imdb_id,
-        title: d.title.clone().or(d.original_title.clone()).unwrap_or_default(),
+        title: d
+            .title
+            .clone()
+            .or(d.original_title.clone())
+            .unwrap_or_default(),
         original_title: d.original_title,
         year: year_of(&d.release_date),
         overview: d.overview.unwrap_or_default(),

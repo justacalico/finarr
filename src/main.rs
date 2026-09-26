@@ -1,4 +1,4 @@
-//! Finarr — all-in-one media automation in a single binary.
+//! Finarr, all-in-one media automation in a single binary.
 
 use anyhow::Result;
 

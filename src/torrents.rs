@@ -9,8 +9,8 @@ use std::sync::Arc;
 use anyhow::{bail, Context, Result};
 use librqbit::api::TorrentIdOrHash;
 use librqbit::{
-    AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session,
-    SessionOptions, SessionPersistenceConfig,
+    AddTorrent, AddTorrentOptions, AddTorrentResponse, ManagedTorrent, Session, SessionOptions,
+    SessionPersistenceConfig,
 };
 use serde::Serialize;
 
@@ -90,25 +90,23 @@ impl Engine {
             ..Default::default()
         };
 
-        let session = match Session::new_with_opts(
-            downloads_dir.clone(),
-            make_opts(settings.listen_port),
-        )
-        .await
-        {
-            Ok(s) => s,
-            Err(e) => {
-                // Port already taken: fall back to an OS-assigned port so
-                // the app still starts instead of dying at boot.
-                tracing::warn!(
-                    "torrent listen port {} unavailable ({e:?}), using a random port",
-                    settings.listen_port
-                );
-                Session::new_with_opts(downloads_dir.clone(), make_opts(0))
-                    .await
-                    .context("start torrent session")?
-            }
-        };
+        let session =
+            match Session::new_with_opts(downloads_dir.clone(), make_opts(settings.listen_port))
+                .await
+            {
+                Ok(s) => s,
+                Err(e) => {
+                    // Port already taken: fall back to an OS-assigned port so
+                    // the app still starts instead of dying at boot.
+                    tracing::warn!(
+                        "torrent listen port {} unavailable ({e:?}), using a random port",
+                        settings.listen_port
+                    );
+                    Session::new_with_opts(downloads_dir.clone(), make_opts(0))
+                        .await
+                        .context("start torrent session")?
+                }
+            };
 
         let engine = Self {
             session,
@@ -124,12 +122,12 @@ impl Engine {
     }
 
     pub fn set_limits(&self, download_kbps: u64, upload_kbps: u64) {
-        self.session.ratelimits.set_download_bps(
-            NonZeroU32::new((download_kbps as u32).saturating_mul(1024)),
-        );
-        self.session.ratelimits.set_upload_bps(
-            NonZeroU32::new((upload_kbps as u32).saturating_mul(1024)),
-        );
+        self.session
+            .ratelimits
+            .set_download_bps(NonZeroU32::new((download_kbps as u32).saturating_mul(1024)));
+        self.session
+            .ratelimits
+            .set_upload_bps(NonZeroU32::new((upload_kbps as u32).saturating_mul(1024)));
     }
 
     /// Safe subfolder under the downloads dir for a category name.
@@ -197,9 +195,8 @@ impl Engine {
     }
 
     pub fn list(&self) -> Vec<TorrentInfo> {
-        self.session.with_torrents(|it| {
-            it.map(|(id, t)| Self::info_of(id, t)).collect()
-        })
+        self.session
+            .with_torrents(|it| it.map(|(id, t)| Self::info_of(id, t)).collect())
     }
 
     fn info_of(id: usize, t: &Arc<ManagedTorrent>) -> TorrentInfo {

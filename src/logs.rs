@@ -64,7 +64,9 @@ impl<S: Subscriber> Layer<S> for BufferLayer {
         };
         event.record(&mut visitor);
         push(LogEntry {
-            ts: chrono::Utc::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string(),
+            ts: chrono::Utc::now()
+                .format("%Y-%m-%d %H:%M:%S%.3f")
+                .to_string(),
             level: event.metadata().level().to_string(),
             target: event.metadata().target().to_string(),
             message: visitor.message,

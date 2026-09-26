@@ -5,7 +5,7 @@ set -euo pipefail
 # streaming its output, so the GitLab job duration matches the GitHub run and
 # the logs appear in GitLab as if it were a native runner.
 
-REPO="justacalico/devinorium"
+REPO="justacalico/finarr"
 WORKFLOW="build.yml"
 
 REF="${1:-main}"

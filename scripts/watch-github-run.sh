@@ -11,7 +11,7 @@ set -euo pipefail
 #   watch-github-run.sh <run_id>
 #       Watch an existing run until it finishes.
 
-REPO="justacalico/devinorium"
+REPO="justacalico/finarr"
 WORKFLOW="build.yml"
 
 find_run() {

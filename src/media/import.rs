@@ -22,8 +22,7 @@ pub struct ImportOutcome {
 /// Place `src` at `dest` using the configured mode.
 fn place_file(src: &Path, dest: &Path, mode: &str) -> Result<()> {
     if let Some(parent) = dest.parent() {
-        std::fs::create_dir_all(parent)
-            .with_context(|| format!("create {}", parent.display()))?;
+        std::fs::create_dir_all(parent).with_context(|| format!("create {}", parent.display()))?;
     }
     match mode {
         "copy" => {
@@ -31,7 +30,8 @@ fn place_file(src: &Path, dest: &Path, mode: &str) -> Result<()> {
         }
         "move" => {
             if std::fs::rename(src, dest).is_err() {
-                std::fs::copy(src, dest).and_then(|_| std::fs::remove_file(src))
+                std::fs::copy(src, dest)
+                    .and_then(|_| std::fs::remove_file(src))
                     .with_context(|| "move failed")?;
             }
         }
@@ -62,12 +62,8 @@ fn collect_files(dir: &Path, kind: &str) -> Vec<PathBuf> {
             out.push(p.to_path_buf());
         }
     }
-    // Largest first — the real feature is rarely the smallest file.
-    out.sort_by_key(|p| {
-        std::cmp::Reverse(
-            p.metadata().map(|m| m.len()).unwrap_or(0),
-        )
-    });
+    // Largest first, the real feature is rarely the smallest file.
+    out.sort_by_key(|p| std::cmp::Reverse(p.metadata().map(|m| m.len()).unwrap_or(0)));
     out
 }
 
@@ -81,28 +77,28 @@ fn quality_of(name: &str) -> String {
     }
 }
 
+/// What a finished download should become in the library.
+pub enum ImportKind {
+    Movie(i64),
+    Series(Vec<i64>),
+    Album(i64),
+}
+
 /// Import everything under `src_dir` for a tracked download item.
-/// `media_type`: movie | series | album. Refs identify the target rows.
 pub async fn import(
     db: &Db,
     paths: &PathsSettings,
     src_dir: &Path,
-    media_type: &str,
-    movie_id: Option<i64>,
-    episode_ids: &[i64],
-    album_id: Option<i64>,
+    kind: ImportKind,
     release_title: &str,
 ) -> Result<ImportOutcome> {
     if !src_dir.exists() {
         bail!("download path no longer exists: {}", src_dir.display());
     }
-    match media_type {
-        "movie" => import_movie(db, paths, src_dir, movie_id.context("movie_id missing")?, release_title).await,
-        "series" => {
-            import_episodes(db, paths, src_dir, episode_ids, release_title).await
-        }
-        "album" => import_album(db, paths, src_dir, album_id.context("album_id missing")?, release_title).await,
-        other => bail!("unknown media type {other}"),
+    match kind {
+        ImportKind::Movie(id) => import_movie(db, paths, src_dir, id, release_title).await,
+        ImportKind::Series(ids) => import_episodes(db, paths, src_dir, &ids, release_title).await,
+        ImportKind::Album(id) => import_album(db, paths, src_dir, id, release_title).await,
     }
 }
 
@@ -124,8 +120,17 @@ async fn import_movie(
         PathBuf::from(&movie.path)
     };
     let quality = {
-        let q = quality_of(&main.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
-        if q.is_empty() { quality_of(release_title) } else { q }
+        let q = quality_of(
+            &main
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default(),
+        );
+        if q.is_empty() {
+            quality_of(release_title)
+        } else {
+            q
+        }
     };
     let ext = naming::ext_of(main);
     let dest = root.join(naming::movie_file(&movie.title, movie.year, &quality, &ext));
@@ -135,11 +140,14 @@ async fn import_movie(
     let mut imported_paths = vec![dest.to_string_lossy().into_owned()];
     for f in &files[1..] {
         // Secondary video files (extras) get placed too, keeping their name.
-        let side = root.join(naming::sanitize(
-            &f.file_stem()
-                .map(|s| s.to_string_lossy().into_owned())
-                .unwrap_or_default(),
-        ) + "." + &naming::ext_of(f));
+        let side = root.join(
+            naming::sanitize(
+                &f.file_stem()
+                    .map(|s| s.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            ) + "."
+                + &naming::ext_of(f),
+        );
         if place_file(f, &side, &paths.import_mode).is_ok() {
             imported_paths.push(side.to_string_lossy().into_owned());
         }
@@ -192,12 +200,10 @@ async fn import_episodes(
     }
     let mut targets = Vec::new();
     for id in episode_ids {
-        let ep = sqlx::query_as::<_, media::Episode>(
-            "SELECT * FROM episodes WHERE id = ?",
-        )
-        .bind(*id)
-        .fetch_one(db.pool())
-        .await?;
+        let ep = sqlx::query_as::<_, media::Episode>("SELECT * FROM episodes WHERE id = ?")
+            .bind(*id)
+            .fetch_one(db.pool())
+            .await?;
         targets.push(ep);
     }
     let series = media::get_series(db, targets[0].series_id).await?;
@@ -226,12 +232,23 @@ async fn import_episodes(
         let parsed = parse::parse_release(&fname);
         let matched = targets.iter().find(|ep| {
             !done_eps.contains(&ep.id)
-                && parse::matches_episode(&parsed, ep.season_number as u32, &[ep.episode_number as u32])
+                && parse::matches_episode(
+                    &parsed,
+                    ep.season_number as u32,
+                    &[ep.episode_number as u32],
+                )
         });
         match matched {
             Some(ep) => {
                 done_eps.insert(ep.id);
-                import_one_episode(db, paths, &series, ep, file, &series_root, release_title, &mut imported_paths).await?;
+                let ctx = EpImport {
+                    db,
+                    paths,
+                    series: &series,
+                    series_root: &series_root,
+                    release_title,
+                };
+                ctx.import_one(ep, file, &mut imported_paths).await?;
             }
             None => unmatched_files.push(file.clone()),
         }
@@ -243,13 +260,23 @@ async fn import_episodes(
         let file = unmatched_files.remove(0);
         if let Some(ep) = targets.iter().find(|e| !done_eps.contains(&e.id)) {
             done_eps.insert(ep.id);
-            import_one_episode(db, paths, &series, ep, &file, &series_root, release_title, &mut imported_paths).await?;
+            let ctx = EpImport {
+                db,
+                paths,
+                series: &series,
+                series_root: &series_root,
+                release_title,
+            };
+            ctx.import_one(ep, &file, &mut imported_paths).await?;
         }
     } else {
         skipped += unmatched_files.len();
     }
     if imported_paths.is_empty() {
-        bail!("could not match any files in {} to wanted episodes", src_dir.display());
+        bail!(
+            "could not match any files in {} to wanted episodes",
+            src_dir.display()
+        );
     }
     Ok(ImportOutcome {
         imported: imported_paths.len(),
@@ -258,61 +285,75 @@ async fn import_episodes(
     })
 }
 
-async fn import_one_episode(
-    db: &Db,
-    paths: &PathsSettings,
-    series: &media::Series,
-    ep: &media::Episode,
-    file: &Path,
-    series_root: &Path,
-    release_title: &str,
-    out: &mut Vec<String>,
-) -> Result<()> {
-    let quality = {
-        let q = quality_of(
-            &file
-                .file_name()
-                .map(|n| n.to_string_lossy().into_owned())
-                .unwrap_or_default(),
-        );
-        if q.is_empty() { quality_of(release_title) } else { q }
-    };
-    let ext = naming::ext_of(file);
-    let season_dir = series_root.join(naming::season_folder(&series.title, ep.season_number as u32));
-    let dest = season_dir.join(naming::episode_file(
-        &series.title,
-        ep.season_number as u32,
-        &[ep.episode_number as u32],
-        &ep.title,
-        &quality,
-        &ext,
-    ));
-    place_file(file, &dest, &paths.import_mode)?;
-    let size = dest.metadata().map(|m| m.len() as i64).unwrap_or(0);
-    let file_id = media::link_file(
-        db,
-        &dest.to_string_lossy(),
-        size,
-        &quality,
-        None,
-        Some(ep.id),
-        None,
-    )
-    .await?;
-    sqlx::query("UPDATE episodes SET status='imported', file_id=? WHERE id=?")
-        .bind(file_id)
-        .bind(ep.id)
-        .execute(db.pool())
+/// Shared context for placing episode files: one instance per season pack.
+struct EpImport<'a> {
+    db: &'a Db,
+    paths: &'a PathsSettings,
+    series: &'a media::Series,
+    series_root: &'a Path,
+    release_title: &'a str,
+}
+
+impl EpImport<'_> {
+    async fn import_one(
+        &self,
+        ep: &media::Episode,
+        file: &Path,
+        out: &mut Vec<String>,
+    ) -> Result<()> {
+        let quality = {
+            let q = quality_of(
+                &file
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_default(),
+            );
+            if q.is_empty() {
+                quality_of(self.release_title)
+            } else {
+                q
+            }
+        };
+        let ext = naming::ext_of(file);
+        let season_dir = self.series_root.join(naming::season_folder(
+            &self.series.title,
+            ep.season_number as u32,
+        ));
+        let dest = season_dir.join(naming::episode_file(
+            &self.series.title,
+            ep.season_number as u32,
+            &[ep.episode_number as u32],
+            &ep.title,
+            &quality,
+            &ext,
+        ));
+        place_file(file, &dest, &self.paths.import_mode)?;
+        let size = dest.metadata().map(|m| m.len() as i64).unwrap_or(0);
+        let file_id = media::link_file(
+            self.db,
+            &dest.to_string_lossy(),
+            size,
+            &quality,
+            None,
+            Some(ep.id),
+            None,
+        )
         .await?;
-    if series.path.is_empty() {
-        sqlx::query("UPDATE series SET path=? WHERE id=?")
-            .bind(series_root.to_string_lossy().into_owned())
-            .bind(series.id)
-            .execute(db.pool())
+        sqlx::query("UPDATE episodes SET status='imported', file_id=? WHERE id=?")
+            .bind(file_id)
+            .bind(ep.id)
+            .execute(self.db.pool())
             .await?;
+        if self.series.path.is_empty() {
+            sqlx::query("UPDATE series SET path=? WHERE id=?")
+                .bind(self.series_root.to_string_lossy().into_owned())
+                .bind(self.series.id)
+                .execute(self.db.pool())
+                .await?;
+        }
+        out.push(dest.to_string_lossy().into_owned());
+        Ok(())
     }
-    out.push(dest.to_string_lossy().into_owned());
-    Ok(())
 }
 
 async fn import_album(
@@ -351,7 +392,7 @@ async fn import_album(
                 .unwrap_or_else(|| "track".into()),
         );
         // Sanitize killed the extension when the filename had dots in odd
-        // places — rebuild it deterministically.
+        // places, rebuild it deterministically.
         let dest = if naming::ext_of(&dest).is_empty() {
             dest.with_extension(naming::ext_of(f))
         } else {

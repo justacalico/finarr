@@ -1,8 +1,8 @@
-//! Finarr — all-in-one media automation in a single binary.
+//! Finarr, all-in-one media automation in a single binary.
 //!
 //! A BitTorrent client (librqbit), Torznab indexer search (Jackett and
 //! friends), movie/series/music libraries with monitoring and automatic
-//! import, and a request system — all behind the Flutter web UI that is
+//! import, and a request system, all behind the Flutter web UI that is
 //! embedded right into this binary.
 
 pub mod api;
@@ -47,7 +47,9 @@ pub struct AppState {
 
 impl AppState {
     pub async fn restart_engine(&self) -> Result<()> {
-        let paths = settings::get::<PathsSettings>(&self.db, "paths").await?;
+        let paths = settings::get::<PathsSettings>(&self.db, "paths")
+            .await?
+            .resolve(&self.config.data_dir);
         let engine_settings = settings::get::<EngineSettings>(&self.db, "engine").await?;
         let new = torrents::Engine::start(
             &engine_settings,
@@ -68,7 +70,9 @@ impl AppState {
 }
 
 async fn start_engine(state_db: &db::Db, cfg: &config::Config) -> Result<torrents::Engine> {
-    let paths = settings::get::<PathsSettings>(state_db, "paths").await?;
+    let paths = settings::get::<PathsSettings>(state_db, "paths")
+        .await?
+        .resolve(&cfg.data_dir);
     let engine_settings = settings::get::<EngineSettings>(state_db, "engine").await?;
     torrents::Engine::start(
         &engine_settings,
@@ -127,14 +131,12 @@ pub async fn run(args: impl IntoIterator<Item = std::ffi::OsString>) -> Result<(
         };
         (host, 0)
     } else {
-        let host: IpAddr = cfg
-            .host_override
-            .unwrap_or_else(|| {
-                general
-                    .host
-                    .parse()
-                    .unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED))
-            });
+        let host: IpAddr = cfg.host_override.unwrap_or_else(|| {
+            general
+                .host
+                .parse()
+                .unwrap_or(IpAddr::V6(Ipv6Addr::UNSPECIFIED))
+        });
         (host, cfg.port_override.unwrap_or(general.port))
     };
 
