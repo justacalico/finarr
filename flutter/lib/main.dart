@@ -57,15 +57,15 @@ class _FinarrAppState extends State<FinarrApp> {
         GoRoute(
             path: '/movie/:id',
             builder: (_, st) =>
-                MovieDetailView(id: int.parse(st.pathParameters['id']!))),
+                MovieDetailView(id: int.tryParse(st.pathParameters['id'] ?? '') ?? 0)),
         GoRoute(
             path: '/series/:id',
             builder: (_, st) =>
-                SeriesDetailView(id: int.parse(st.pathParameters['id']!))),
+                SeriesDetailView(id: int.tryParse(st.pathParameters['id'] ?? '') ?? 0)),
         GoRoute(
             path: '/artist/:id',
             builder: (_, st) =>
-                ArtistDetailView(id: int.parse(st.pathParameters['id']!))),
+                ArtistDetailView(id: int.tryParse(st.pathParameters['id'] ?? '') ?? 0)),
         GoRoute(
             path: '/settings',
             builder: (_, _) => const ShellView(initialIndex: 9)),

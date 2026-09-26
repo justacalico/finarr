@@ -25,7 +25,13 @@ pub async fn setup(
     State(state): State<Arc<AppState>>,
     Json(body): Json<SetupBody>,
 ) -> Result<Json<Value>, ApiError> {
-    let count = state.db.user_count().await.map_err(ApiError::internal)?;
+    // A single transaction keeps two concurrent setup posts from both
+    // passing the empty-users check.
+    let mut tx = state.db.pool().begin().await.map_err(ApiError::internal)?;
+    let count: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM users")
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(ApiError::internal)?;
     if count > 0 && !state.config.dev_mode {
         return Err(ApiError::forbidden("setup already completed"));
     }
@@ -49,9 +55,10 @@ pub async fn setup(
             .clone()
             .unwrap_or_else(|| body.username.clone()),
     )
-    .fetch_one(state.db.pool())
+    .fetch_one(&mut *tx)
     .await
     .map_err(ApiError::internal)?;
+    tx.commit().await.map_err(ApiError::internal)?;
     let user_id: i64 = row.get("id");
 
     if let Some(paths) = body.paths {

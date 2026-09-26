@@ -7,6 +7,7 @@ pub mod parse;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use sqlx::{FromRow, Row};
+use std::path::Path;
 
 use crate::db::Db;
 use crate::metadata::{self, AlbumResult, MovieResult, SeriesResult};
@@ -189,7 +190,16 @@ pub async fn update_movie_monitored(db: &Db, id: i64, monitored: bool) -> Result
     Ok(())
 }
 
-pub async fn delete_movie(db: &Db, id: i64, delete_files: bool) -> Result<()> {
+/// Remove a directory only if it is strictly inside `root`: guards against
+/// empty/malformed library paths resolving to the library root itself.
+fn safe_remove_dir(path: &str, root: &Path) {
+    let p = Path::new(path);
+    if !path.is_empty() && p != root && p.starts_with(root) {
+        let _ = std::fs::remove_dir_all(p);
+    }
+}
+
+pub async fn delete_movie(db: &Db, id: i64, delete_files: bool, root: &Path) -> Result<()> {
     let movie = get_movie(db, id).await?;
     let files = movie_files(db, id).await?;
     sqlx::query("DELETE FROM movies WHERE id = ?")
@@ -200,9 +210,7 @@ pub async fn delete_movie(db: &Db, id: i64, delete_files: bool) -> Result<()> {
         for f in &files {
             let _ = std::fs::remove_file(&f.path);
         }
-        if !movie.path.is_empty() {
-            let _ = std::fs::remove_dir_all(&movie.path);
-        }
+        safe_remove_dir(&movie.path, root);
     }
     Ok(())
 }
@@ -277,6 +285,7 @@ pub async fn add_series(
         bail!("series already in library");
     }
 
+    let mut tx = db.pool().begin().await?;
     let row = sqlx::query(
         "INSERT INTO series (tvmaze_id, tvdb_id, tmdb_id, imdb_id, title, sort_title,
             overview, poster_url, backdrop_url, year, network, air_time,
@@ -298,17 +307,18 @@ pub async fn add_series(
     .bind(&s.status)
     .bind(monitored as i64)
     .bind(&path)
-    .fetch_one(db.pool())
+    .fetch_one(&mut *tx)
     .await?;
     let series_id: i64 = row.get("id");
 
     for season in &s.seasons {
-        let monitored_season = season_filter.is_empty() || season_filter.contains(&season.number);
+        let monitored_season =
+            monitored && (season_filter.is_empty() || season_filter.contains(&season.number));
         sqlx::query("INSERT INTO seasons (series_id, season_number, monitored) VALUES (?, ?, ?)")
             .bind(series_id)
             .bind(season.number as i64)
             .bind(monitored_season as i64)
-            .execute(db.pool())
+            .execute(&mut *tx)
             .await?;
         for ep in &season.episodes {
             if ep.number == 0 {
@@ -332,10 +342,11 @@ pub async fn add_series(
             .bind(ep.runtime_min)
             .bind(monitored_season as i64)
             .bind(status)
-            .execute(db.pool())
+            .execute(&mut *tx)
             .await?;
         }
     }
+    tx.commit().await?;
     get_series(db, series_id).await
 }
 
@@ -487,7 +498,7 @@ pub async fn update_series_monitored(db: &Db, id: i64, monitored: bool) -> Resul
     Ok(())
 }
 
-pub async fn delete_series(db: &Db, id: i64, delete_files: bool) -> Result<()> {
+pub async fn delete_series(db: &Db, id: i64, delete_files: bool, root: &Path) -> Result<()> {
     let s = get_series(db, id).await?;
     let files: Vec<MediaFile> = sqlx::query_as::<_, MediaFile>(
         "SELECT mf.* FROM media_files mf
@@ -504,9 +515,7 @@ pub async fn delete_series(db: &Db, id: i64, delete_files: bool) -> Result<()> {
         for f in &files {
             let _ = std::fs::remove_file(&f.path);
         }
-        if !s.path.is_empty() {
-            let _ = std::fs::remove_dir_all(&s.path);
-        }
+        safe_remove_dir(&s.path, root);
     }
     Ok(())
 }
@@ -556,9 +565,10 @@ pub async fn add_artist(
     if exists.is_some() {
         bail!("artist already in library");
     }
-    sqlx::query(
+    let mut tx = db.pool().begin().await?;
+    let row = sqlx::query(
         "INSERT INTO artists (mbid, name, sort_name, overview, image_url, monitored, path)
-         VALUES (?, ?, ?, ?, ?, ?, ?)",
+         VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(&artist.mbid)
     .bind(&artist.name)
@@ -571,13 +581,9 @@ pub async fn add_artist(
     .bind(&artist.image_url)
     .bind(monitored as i64)
     .bind(&path)
-    .execute(db.pool())
+    .fetch_one(&mut *tx)
     .await?;
-    let artist_id: i64 = sqlx::query("SELECT id FROM artists WHERE mbid = ?")
-        .bind(&artist.mbid)
-        .fetch_one(db.pool())
-        .await?
-        .get("id");
+    let artist_id: i64 = row.get("id");
     for a in albums {
         // Only monitor real albums by default; EPs/singles/compilations
         // still get rows so the user can opt in.
@@ -592,9 +598,10 @@ pub async fn add_artist(
         .bind(&a.release_date)
         .bind(&a.album_type)
         .bind(auto as i64)
-        .execute(db.pool())
+        .execute(&mut *tx)
         .await?;
     }
+    tx.commit().await?;
     get_artist(db, artist_id).await
 }
 
@@ -607,14 +614,14 @@ pub async fn set_album_monitored(db: &Db, album_id: i64, monitored: bool) -> Res
     Ok(())
 }
 
-pub async fn delete_artist(db: &Db, id: i64, delete_files: bool) -> Result<()> {
+pub async fn delete_artist(db: &Db, id: i64, delete_files: bool, root: &Path) -> Result<()> {
     let a = get_artist(db, id).await?;
     sqlx::query("DELETE FROM artists WHERE id = ?")
         .bind(id)
         .execute(db.pool())
         .await?;
-    if delete_files && !a.path.is_empty() {
-        let _ = std::fs::remove_dir_all(&a.path);
+    if delete_files {
+        safe_remove_dir(&a.path, root);
     }
     Ok(())
 }

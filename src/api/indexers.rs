@@ -22,12 +22,18 @@ pub struct IndexerBody {
 }
 
 pub async fn list(
-    _user: crate::auth::AuthUser,
+    user: crate::auth::AuthUser,
     State(state): State<Arc<AppState>>,
 ) -> Result<Json<Value>, ApiError> {
-    let items = indexers::list(&state.db)
+    let mut items = indexers::list(&state.db)
         .await
         .map_err(ApiError::internal)?;
+    // Indexer keys are secrets; non-admins get the list but not the keys.
+    if user.role != "admin" {
+        for i in &mut items {
+            i.api_key = "********".into();
+        }
+    }
     Ok(Json(json!({ "indexers": items })))
 }
 
@@ -45,7 +51,7 @@ pub async fn create(
             name: body.name.trim(),
             url: body.url.trim(),
             api_key: body.api_key.as_deref().unwrap_or(""),
-            enabled: true,
+            enabled: body.enabled.unwrap_or(true),
             categories: &body.categories.unwrap_or_default(),
             priority: body.priority.unwrap_or(25),
         },

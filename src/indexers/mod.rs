@@ -59,14 +59,15 @@ pub struct IndexerConfig<'a> {
 pub async fn create(db: &Db, cfg: &IndexerConfig<'_>) -> Result<Indexer> {
     let cats = serde_json::to_string(cfg.categories)?;
     let row = sqlx::query(
-        "INSERT INTO indexers (name, url, api_key, categories, priority)
-         VALUES (?, ?, ?, ?, ?) RETURNING id",
+        "INSERT INTO indexers (name, url, api_key, categories, priority, enabled)
+         VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
     )
     .bind(cfg.name)
     .bind(cfg.url)
     .bind(cfg.api_key)
     .bind(&cats)
     .bind(cfg.priority)
+    .bind(cfg.enabled)
     .fetch_one(db.pool())
     .await?;
     Ok(Indexer {
@@ -74,7 +75,7 @@ pub async fn create(db: &Db, cfg: &IndexerConfig<'_>) -> Result<Indexer> {
         name: cfg.name.into(),
         url: cfg.url.into(),
         api_key: cfg.api_key.into(),
-        enabled: 1,
+        enabled: cfg.enabled as i64,
         priority: cfg.priority,
         categories: cats,
         created_at: String::new(),

@@ -14,7 +14,7 @@ class HomeView extends StatelessWidget {
     final s = context.watch<AppState>();
     final wide = MediaQuery.sizeOf(context).width >= 900;
     final downloading =
-        s.queue.where((q) => q['state'] == 'live' || q['live'] != null && q['live']['download_speed'] > 0).length;
+        s.queue.where((q) => q['state'] == 'live' || ((q['live']?['download_speed']) ?? 0) > 0).length;
     final upcoming = s.calendarItems.take(8).toList();
     final recent = s.history.take(8).toList();
 

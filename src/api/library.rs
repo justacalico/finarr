@@ -108,15 +108,28 @@ pub struct DeleteQuery {
     pub delete_files: Option<bool>,
 }
 
+async fn paths(state: &AppState) -> Result<PathsSettings, ApiError> {
+    Ok(settings::get::<PathsSettings>(&state.db, "paths")
+        .await
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir))
+}
+
 pub async fn delete_movie(
     _user: AuthUser,
     State(state): State<Arc<AppState>>,
     Path(id): Path<i64>,
     Query(q): Query<DeleteQuery>,
 ) -> Result<Json<Value>, ApiError> {
-    media::delete_movie(&state.db, id, q.delete_files.unwrap_or(false))
-        .await
-        .map_err(ApiError::internal)?;
+    let root = paths(&state).await?.movies_root;
+    media::delete_movie(
+        &state.db,
+        id,
+        q.delete_files.unwrap_or(false),
+        std::path::Path::new(&root),
+    )
+    .await
+    .map_err(ApiError::internal)?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -228,9 +241,15 @@ pub async fn delete_series(
     Path(id): Path<i64>,
     Query(q): Query<DeleteQuery>,
 ) -> Result<Json<Value>, ApiError> {
-    media::delete_series(&state.db, id, q.delete_files.unwrap_or(false))
-        .await
-        .map_err(ApiError::internal)?;
+    let root = paths(&state).await?.series_root;
+    media::delete_series(
+        &state.db,
+        id,
+        q.delete_files.unwrap_or(false),
+        std::path::Path::new(&root),
+    )
+    .await
+    .map_err(ApiError::internal)?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -317,20 +336,13 @@ pub async fn add_artist(
     let albums = musicbrainz::albums(&state.http, &body.mbid)
         .await
         .map_err(|e| ApiError::bad_request(format!("musicbrainz lookup failed: {e}")))?;
-    // Reuse the search-shaped struct; mbid is all we need stored.
-    let artist = crate::metadata::ArtistResult {
-        mbid: body.mbid.clone(),
-        name: String::new(),
-        sort_name: String::new(),
-        overview: String::new(),
-        image_url: None,
-    };
-    // The real name comes from the search endpoint; look it up once here.
-    let artist = if let Ok(mut res) = musicbrainz::search_artists(&state.http, &body.mbid).await {
-        res.pop().filter(|a| a.mbid == body.mbid).unwrap_or(artist)
-    } else {
-        artist
-    };
+    // Direct MBID lookup; a name search can never match an MBID.
+    let artist = musicbrainz::artist(&state.http, &body.mbid)
+        .await
+        .map_err(|e| ApiError::bad_request(format!("musicbrainz lookup failed: {e}")))?;
+    if artist.name.trim().is_empty() {
+        return Err(ApiError::bad_request("artist name is empty"));
+    }
     let artist = media::add_artist(
         &state.db,
         &artist,
@@ -375,9 +387,15 @@ pub async fn delete_artist(
     Path(id): Path<i64>,
     Query(q): Query<DeleteQuery>,
 ) -> Result<Json<Value>, ApiError> {
-    media::delete_artist(&state.db, id, q.delete_files.unwrap_or(false))
-        .await
-        .map_err(ApiError::internal)?;
+    let root = paths(&state).await?.music_root;
+    media::delete_artist(
+        &state.db,
+        id,
+        q.delete_files.unwrap_or(false),
+        std::path::Path::new(&root),
+    )
+    .await
+    .map_err(ApiError::internal)?;
     Ok(Json(json!({ "ok": true })))
 }
 
@@ -639,6 +657,7 @@ pub mod scan {
         if aroot.is_dir() {
             for artist in &artists {
                 let artist_dir = naming::sanitize(&artist.name).to_lowercase();
+                let albums = media::artist_albums(db, artist.id).await?;
                 for entry in WalkDir::new(aroot).min_depth(2).max_depth(2) {
                     let Ok(e) = entry else { continue };
                     if !e.path().is_dir() {
@@ -653,7 +672,6 @@ pub mod scan {
                     if !parent_matches {
                         continue;
                     }
-                    let albums = media::artist_albums(db, artist.id).await?;
                     let dirname = e.file_name().to_string_lossy().to_lowercase();
                     let Some(album) = albums
                         .iter()

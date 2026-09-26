@@ -136,8 +136,12 @@ class _RequestTile extends StatelessWidget {
               icon: const Icon(Icons.check_circle_outline, color: F.ok),
               onPressed: () async {
                 final s = context.read<AppState>();
-                await s.api
-                    .post('/api/requests/${request['id']}/approve');
+                try {
+                  await s.api
+                      .post('/api/requests/${request['id']}/approve');
+                } catch (e) {
+                  if (context.mounted) snack(context, '$e', error: true);
+                }
                 s.refreshRequests();
               },
             ),
@@ -146,8 +150,12 @@ class _RequestTile extends StatelessWidget {
               icon: const Icon(Icons.cancel_outlined, color: F.bad),
               onPressed: () async {
                 final s = context.read<AppState>();
-                await s.api
-                    .post('/api/requests/${request['id']}/decline');
+                try {
+                  await s.api
+                      .post('/api/requests/${request['id']}/decline');
+                } catch (e) {
+                  if (context.mounted) snack(context, '$e', error: true);
+                }
                 s.refreshRequests();
               },
             ),
@@ -158,8 +166,12 @@ class _RequestTile extends StatelessWidget {
               icon: const Icon(Icons.delete_outline, size: 18),
               onPressed: () async {
                 final s = context.read<AppState>();
-                await s.api
-                    .delete('/api/requests/${request['id']}');
+                try {
+                  await s.api
+                      .delete('/api/requests/${request['id']}');
+                } catch (e) {
+                  if (context.mounted) snack(context, '$e', error: true);
+                }
                 s.refreshRequests();
               },
             ),

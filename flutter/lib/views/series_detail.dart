@@ -30,6 +30,7 @@ class _SeriesDetailViewState extends State<SeriesDetailView> {
       final api = context.read<AppState>().api;
       final r = await api.get('/api/series/${widget.id}');
       final e = await api.get('/api/series/${widget.id}/episodes');
+      if (!mounted) return;
       setState(() {
         _series = r['series'];
         _seasons = e['seasons'] ?? [];

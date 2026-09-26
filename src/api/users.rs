@@ -105,6 +105,9 @@ pub async fn update(
             .map_err(ApiError::internal)?;
     }
     if let Some(role) = &body.role {
+        if !matches!(role.as_str(), "admin" | "user") {
+            return Err(ApiError::bad_request("role must be admin or user"));
+        }
         if admin.0.id == id && role != "admin" {
             return Err(ApiError::bad_request("cannot demote yourself"));
         }

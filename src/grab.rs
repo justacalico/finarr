@@ -19,7 +19,7 @@ pub enum ClientChoice {
 /// is the implicit default at priority 0 unless an external is preferred.
 pub async fn pick_client(db: &Db) -> Result<ClientChoice> {
     let row = sqlx::query(
-        "SELECT id, settings FROM download_clients WHERE enabled = 1 ORDER BY priority LIMIT 1",
+        "SELECT id, settings FROM download_clients WHERE enabled = 1 AND impl='qbittorrent' ORDER BY priority LIMIT 1",
     )
     .fetch_optional(db.pool())
     .await?;

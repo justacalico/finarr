@@ -78,7 +78,7 @@ pub async fn create(
         .await
         .unwrap_or_default()
         .resolve(&state.config.data_dir);
-    let (title, year, poster, detail) = match body.media_type.as_str() {
+    let (title, year, poster, mut detail) = match body.media_type.as_str() {
         "movie" => {
             let meta = settings::get::<MetadataSettings>(&state.db, "metadata")
                 .await
@@ -112,16 +112,9 @@ pub async fn create(
             }
         }
         "artist" => {
-            let mut hits = musicbrainz::search_artists(&state.http, &body.external_id)
+            let a = musicbrainz::artist(&state.http, &body.external_id)
                 .await
-                .unwrap_or_default();
-            let a = hits
-                .iter()
-                .find(|a| a.mbid == body.external_id)
-                .or_else(|| hits.first())
-                .ok_or_else(|| ApiError::bad_request("artist not found"))?
-                .clone();
-            let _ = hits.pop();
+                .map_err(|_| ApiError::bad_request("artist not found"))?;
             {
                 let d = serde_json::to_value(&a).unwrap();
                 (a.name.clone(), None, a.image_url.clone(), d)
@@ -160,6 +153,9 @@ pub async fn create(
         return Err(ApiError::conflict("already in library"));
     }
 
+    if let Some(seasons) = &body.seasons {
+        detail["seasons"] = json!(seasons);
+    }
     // Admins' requests are auto-approved and kick off immediately.
     let status = if user.is_admin() {
         "approved"
@@ -216,11 +212,15 @@ async fn fulfill(state: &Arc<AppState>, request_id: i64, paths: &PathsSettings) 
                 .map(|_| ())
         }
         "series" => {
+            let seasons: Vec<u32> = detail
+                .get("seasons")
+                .and_then(|v| serde_json::from_value(v.clone()).ok())
+                .unwrap_or_default();
             let s: crate::metadata::SeriesResult = match serde_json::from_value(detail) {
                 Ok(s) => s,
                 Err(_) => return,
             };
-            media::add_series(&state.db, &s, &paths.series_root, &[], true)
+            media::add_series(&state.db, &s, &paths.series_root, &seasons, true)
                 .await
                 .map(|_| ())
         }

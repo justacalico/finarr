@@ -40,14 +40,17 @@ class _SettingsViewState extends State<SettingsView> {
           child: ListView(
             padding: const EdgeInsets.symmetric(vertical: 16),
             children: [
+              // Every admin-managed section calls admin-only endpoints;
+              // non-admins only get their account settings.
               for (var i = 0; i < _sections.length; i++)
-                _NavTile(
-                  icon: _sections[i].$2,
-                  label: _sections[i].$1,
-                  selected: _section == i,
-                  compact: !wide,
-                  onTap: () => setState(() => _section = i),
-                ),
+                if (s.isAdmin || i == 8)
+                  _NavTile(
+                    icon: _sections[i].$2,
+                    label: s.isAdmin ? _sections[i].$1 : 'Account',
+                    selected: _section == i,
+                    compact: !wide,
+                    onTap: () => setState(() => _section = i),
+                  ),
             ],
           ),
         ),
@@ -130,6 +133,22 @@ mixin _SectionState<T extends StatefulWidget> on State<T> {
   bool saving = false;
   Map<String, dynamic> get current => s.settings[section] ?? {};
 
+  /// Sections can build before refreshSettings lands. When it does, fill
+  /// fields the user hasn't typed into yet.
+  void syncText(TextEditingController c, Object? value) {
+    final v = value?.toString() ?? '';
+    if (v.isNotEmpty && c.text.isEmpty) c.text = v;
+  }
+
+  void syncBool(bool Function() getter, void Function(bool) set, Object? v) {
+    if (v is bool && !_synced) {
+      set(v);
+    }
+  }
+
+  bool _synced = false;
+  void markSynced() => _synced = s.settings[section] != null;
+
   Future<void> save(Map<String, dynamic> body) async {
     setState(() => saving = true);
     try {
@@ -166,6 +185,10 @@ class _GeneralSectionState extends State<_GeneralSection>
 
   @override
   Widget build(BuildContext context) {
+    syncText(_name, current['instance_name']);
+    syncText(_host, current['host']);
+    syncText(_port, current['port']);
+    markSynced();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -357,14 +380,19 @@ class _IndexerTile extends StatelessWidget {
             tooltip: 'Test',
             icon: const Icon(Icons.wifi_tethering, size: 18),
             onPressed: () async {
-              final r = await s.api.post('/api/indexers/${indexer['id']}/test');
-              if (context.mounted) {
-                snack(
-                    context,
-                    r['ok'] == true
-                        ? 'Indexer OK'
-                        : 'Failed: ${r['error'] ?? 'unknown'}',
-                    error: r['ok'] != true);
+              try {
+                final r =
+                    await s.api.post('/api/indexers/${indexer['id']}/test');
+                if (context.mounted) {
+                  snack(
+                      context,
+                      r['ok'] == true
+                          ? 'Indexer OK'
+                          : 'Failed: ${r['error'] ?? 'unknown'}',
+                      error: r['ok'] != true);
+                }
+              } catch (e) {
+                if (context.mounted) snack(context, '$e', error: true);
               }
             },
           ),
@@ -383,7 +411,11 @@ class _IndexerTile extends StatelessWidget {
                   confirmLabel: 'Delete',
                   destructive: true);
               if (ok) {
-                await s.api.delete('/api/indexers/${indexer['id']}');
+                try {
+                  await s.api.delete('/api/indexers/${indexer['id']}');
+                } catch (e) {
+                  if (context.mounted) snack(context, '$e', error: true);
+                }
                 s.refreshIndexers();
               }
             },
@@ -584,14 +616,19 @@ class _ClientTile extends StatelessWidget {
             tooltip: 'Test',
             icon: const Icon(Icons.wifi_tethering, size: 18),
             onPressed: () async {
-              final r = await s.api.post('/api/clients/${client['id']}/test');
-              if (context.mounted) {
-                snack(
-                    context,
-                    r['ok'] == true
-                        ? 'Connected, ${r['torrents']} torrents'
-                        : 'Failed: ${r['error']}',
-                    error: r['ok'] != true);
+              try {
+                final r =
+                    await s.api.post('/api/clients/${client['id']}/test');
+                if (context.mounted) {
+                  snack(
+                      context,
+                      r['ok'] == true
+                          ? 'Connected, ${r['torrents']} torrents'
+                          : 'Failed: ${r['error']}',
+                      error: r['ok'] != true);
+                }
+              } catch (e) {
+                if (context.mounted) snack(context, '$e', error: true);
               }
             },
           ),
@@ -616,7 +653,11 @@ class _ClientTile extends StatelessWidget {
                   confirmLabel: 'Delete',
                   destructive: true);
               if (ok) {
-                await s.api.delete('/api/clients/${client['id']}');
+                try {
+                  await s.api.delete('/api/clients/${client['id']}');
+                } catch (e) {
+                  if (context.mounted) snack(context, '$e', error: true);
+                }
                 s.refreshClients();
               }
             },
@@ -872,6 +913,8 @@ class _MetadataSectionState extends State<_MetadataSection>
 
   @override
   Widget build(BuildContext context) {
+    syncText(_tmdb, current['tmdb_api_key']);
+    markSynced();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -915,6 +958,11 @@ class _AutomationSectionState extends State<_AutomationSection>
 
   @override
   Widget build(BuildContext context) {
+    syncText(_interval, current['search_interval_min']);
+    syncBool(() => _searchEnabled, (v) => _searchEnabled = v,
+        current['wanted_search_enabled']);
+    syncBool(() => _autoImport, (v) => _autoImport = v, current['auto_import']);
+    markSynced();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1001,6 +1049,12 @@ class _NotificationsSectionState extends State<_NotificationsSection>
 
   @override
   Widget build(BuildContext context) {
+    if (!_synced && current['kind'] != null) {
+      _kind = current['kind'];
+    }
+    syncText(_url, current['url']);
+    syncText(_token, current['token']);
+    markSynced();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

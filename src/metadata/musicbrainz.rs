@@ -83,6 +83,30 @@ pub async fn search_artists(http: &reqwest::Client, query: &str) -> Result<Vec<A
         .collect())
 }
 
+/// Fetch a single artist by MBID. Search can't do this: `artist:{mbid}`
+/// matches names, not ids.
+pub async fn artist(http: &reqwest::Client, mbid: &str) -> Result<ArtistResult> {
+    throttle().await;
+    let resp: Artist = http
+        .get(format!("{BASE}/artist/{mbid}"))
+        .query(&[("fmt", "json")])
+        .send()
+        .await
+        .context("musicbrainz artist lookup")?
+        .error_for_status()
+        .context("musicbrainz status")?
+        .json()
+        .await
+        .context("musicbrainz parse")?;
+    Ok(ArtistResult {
+        mbid: resp.id,
+        name: resp.name,
+        sort_name: resp.sort_name.unwrap_or_default(),
+        overview: resp.disambiguation.unwrap_or_default(),
+        image_url: None,
+    })
+}
+
 /// Release groups for an artist (albums, EPs, singles...).
 pub async fn albums(http: &reqwest::Client, artist_mbid: &str) -> Result<Vec<AlbumResult>> {
     throttle().await;

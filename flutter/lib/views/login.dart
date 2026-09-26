@@ -20,9 +20,15 @@ class _LoginViewState extends State<LoginView> {
   bool _showServer = false;
 
   @override
+  void initState() {
+    super.initState();
+    final url = context.read<AppState>().serverUrl;
+    if (url != null) _server.text = url;
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
-    _server.text = s.serverUrl ?? _server.text;
     return Scaffold(
       body: Center(
         child: ConstrainedBox(
@@ -119,6 +125,7 @@ class _LoginViewState extends State<LoginView> {
     if (_showServer && _server.text.trim() != (s.serverUrl ?? '')) {
       await s.setServerUrl(_server.text.trim());
     }
+    if (!mounted) return;
     setState(() {
       _busy = true;
       _error = null;

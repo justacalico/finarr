@@ -41,6 +41,9 @@ pub struct AppState {
     /// Swapped wholesale when engine settings change enough to need a
     /// fresh listen socket (port, dht). Rate limits apply live instead.
     pub engine: tokio::sync::RwLock<torrents::Engine>,
+    /// Bumped on every engine restart so background tasks can detect they
+    /// were looking at a dead session.
+    pub engine_gen: std::sync::atomic::AtomicU64,
     /// The address the HTTP server actually bound (for the info page).
     pub listen_addr: Mutex<Option<String>>,
 }
@@ -51,20 +54,21 @@ impl AppState {
             .await?
             .resolve(&self.config.data_dir);
         let engine_settings = settings::get::<EngineSettings>(&self.db, "engine").await?;
+        // Stop the old session first so the new one can keep the same port.
+        // A brief window exists where readers hold a dead engine: they get
+        // empty results rather than errors, and engine_gen lets sweepers
+        // notice the swap instead of acting on stale data.
+        let mut guard = self.engine.write().await;
+        guard.session_stop().await;
         let new = torrents::Engine::start(
             &engine_settings,
             PathBuf::from(&paths.downloads_dir),
             self.config.torrent_state_dir(),
         )
         .await?;
-        let mut guard = self.engine.write().await;
-        let old = std::mem::replace(&mut *guard, new);
-        drop(guard);
-        tokio::spawn(async move {
-            // Give in-flight calls a moment, then stop the old session.
-            tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-            old.session_stop().await;
-        });
+        *guard = new;
+        self.engine_gen
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         Ok(())
     }
 }
@@ -99,9 +103,25 @@ pub async fn run(args: impl IntoIterator<Item = std::ffi::OsString>) -> Result<(
         db: database,
         http,
         engine: tokio::sync::RwLock::new(engine),
+        engine_gen: std::sync::atomic::AtomicU64::new(0),
         listen_addr: Mutex::new(None),
     });
 
+    if cfg.dev_mode {
+        // Dev bypasses auth as user 0, but rows like requests reference a
+        // real user_id. Give dev mode a real admin account.
+        if state.db.user_count().await.unwrap_or(0) == 0 {
+            let hash =
+                crate::auth::password::hash_password("dev-password-1234").unwrap_or_default();
+            let _ = sqlx::query(
+                "INSERT INTO users (username, password_hash, display_name, role)
+                 VALUES ('dev', ?, 'Dev', 'admin')",
+            )
+            .bind(hash)
+            .execute(state.db.pool())
+            .await;
+        }
+    }
     crate::api::system::mark_start();
     services::spawn_all(state.clone());
 

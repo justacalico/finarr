@@ -169,6 +169,14 @@ pub async fn grab(
     State(state): State<Arc<AppState>>,
     Json(body): Json<GrabBody>,
 ) -> Result<Json<Value>, ApiError> {
+    if !body.download_url.starts_with("magnet:")
+        && !body.download_url.starts_with("http://")
+        && !body.download_url.starts_with("https://")
+    {
+        return Err(ApiError::bad_request(
+            "download_url must be a magnet or http(s) link",
+        ));
+    }
     let release = ReleaseResult {
         title: body.title.clone(),
         guid: body.guid.unwrap_or_default(),

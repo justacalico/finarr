@@ -60,8 +60,10 @@ class _ReleaseSearchSheetState extends State<ReleaseSearchSheet> {
     });
     try {
       final r = await context.read<AppState>().api.post(widget.searchPath);
+      if (!mounted) return;
       setState(() => _releases = r['releases'] ?? []);
     } catch (e) {
+      if (!mounted) return;
       setState(() => _error = e.toString());
     }
   }

@@ -38,7 +38,8 @@ FROM debian:bookworm-slim
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ca-certificates \
     && rm -rf /var/lib/apt/lists/* \
-    && useradd --system --create-home --shell /usr/sbin/nologin finarr
+    && useradd --system --create-home --shell /usr/sbin/nologin finarr \
+    && install -d -o finarr -g finarr /data
 COPY --from=backend /app/target/release/finarr /usr/local/bin/finarr
 USER finarr
 WORKDIR /home/finarr
@@ -47,5 +48,6 @@ ENV FINARR_DATA_DIR=/data \
     FINARR_PORT=8787
 EXPOSE 8787
 EXPOSE 4242
+EXPOSE 4242/udp
 VOLUME ["/data"]
 ENTRYPOINT ["finarr"]

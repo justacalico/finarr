@@ -48,8 +48,11 @@ async fn movie_import_places_file_and_marks_imported() {
     // Fake a completed download.
     let src_dir = downloads.join("Test.Film.2024.1080p.WEB-DL.x264-GRP");
     std::fs::create_dir_all(&src_dir).unwrap();
-    std::fs::write(src_dir.join("Test.Film.2024.1080p.WEB-DL.x264-GRP.mkv"), b"video")
-        .unwrap();
+    std::fs::write(
+        src_dir.join("Test.Film.2024.1080p.WEB-DL.x264-GRP.mkv"),
+        b"video",
+    )
+    .unwrap();
     std::fs::write(src_dir.join("readme.nfo"), b"info").unwrap();
 
     let paths = PathsSettings {
@@ -77,7 +80,10 @@ async fn movie_import_places_file_and_marks_imported() {
     assert!(dest.exists(), "expected {dest:?}");
     let after = media::get_movie(&db, movie.id).await.unwrap();
     assert_eq!(after.status, "imported");
-    assert_eq!(after.path, library.join("Test Film (2024)").to_string_lossy());
+    assert_eq!(
+        after.path,
+        library.join("Test Film (2024)").to_string_lossy()
+    );
 
     std::fs::remove_dir_all(&root).ok();
 }
@@ -157,8 +163,12 @@ async fn series_import_matches_episode_numbers() {
 
     assert_eq!(outcome.imported, 2, "{outcome:?}");
     let season_dir = series_root.join("Some Show").join("Season 01");
-    assert!(season_dir.join("Some Show - S01E01 - Pilot [WEB-DL 720p].mkv").exists());
-    assert!(season_dir.join("Some Show - S01E02 - Second [WEB-DL 720p].mkv").exists());
+    assert!(season_dir
+        .join("Some Show - S01E01 - Pilot [WEB-DL 720p].mkv")
+        .exists());
+    assert!(season_dir
+        .join("Some Show - S01E02 - Second [WEB-DL 720p].mkv")
+        .exists());
 
     std::fs::remove_dir_all(&root).ok();
 }

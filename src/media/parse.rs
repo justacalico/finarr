@@ -174,6 +174,53 @@ pub fn matches_episode(p: &ParsedRelease, season: u32, episodes: &[u32]) -> bool
     episodes.iter().all(|e| p.episodes.contains(e)) && !p.episodes.is_empty()
 }
 
+/// Lowercase alphanumeric-only form, for fuzzy title containment checks.
+fn normalize_title(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_ascii_alphanumeric())
+        .map(|c| c.to_ascii_lowercase())
+        .collect()
+}
+
+/// Does the release title plausibly refer to `want`? Loose substring match
+/// after normalization: "Some.Show.S01E01..." contains "someshow".
+pub fn titles_match(want: &str, release_title: &str) -> bool {
+    let w = normalize_title(want);
+    !w.is_empty() && normalize_title(release_title).contains(&w)
+}
+
+/// Hard gate for auto-grabbing TV results. A release must actually cover the
+/// wanted episodes (or be the matching season pack) to be eligible at all.
+pub fn eligible_tv(p: &ParsedRelease, season: u32, episodes: &[u32]) -> bool {
+    if p.season != Some(season) {
+        return false;
+    }
+    if !episodes.is_empty() {
+        return matches_episode(p, season, episodes) || (p.season_pack && p.episodes.is_empty());
+    }
+    p.season_pack || p.episodes.len() >= 2
+}
+
+/// Hard gate for auto-grabbing movie results: fuzzy title match, and if the
+/// release carries a year it must agree with the wanted one (give or take a
+/// year for staggered festival/release-year mismatches).
+pub fn eligible_movie(
+    p: &ParsedRelease,
+    release_title: &str,
+    want_title: &str,
+    want_year: Option<i64>,
+) -> bool {
+    if !titles_match(want_title, release_title) {
+        return false;
+    }
+    if let (Some(wy), Some(py)) = (want_year, p.year.map(|y| y as i64)) {
+        if (wy - py).abs() > 1 {
+            return false;
+        }
+    }
+    p.season.is_none()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

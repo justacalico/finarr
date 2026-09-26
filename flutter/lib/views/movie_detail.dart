@@ -28,11 +28,13 @@ class _MovieDetailViewState extends State<MovieDetailView> {
   Future<void> _load() async {
     try {
       final r = await context.read<AppState>().api.get('/api/movies/${widget.id}');
+      if (!mounted) return;
       setState(() {
         _movie = r['movie'];
         _files = r['files'] ?? [];
       });
     } catch (_) {}
+    if (!mounted) return;
   }
 
   @override
@@ -191,23 +193,16 @@ class _MovieDetailViewState extends State<MovieDetailView> {
   }
 
   Future<void> _delete() async {
-    final files = await confirm(context,
+    final choice = await confirmDelete(context,
         title: 'Delete movie',
-        message: 'Also delete the imported files from disk?',
-        confirmLabel: 'Delete files',
-        destructive: true);
-    if (!mounted) return;
-    if (files) {
-      await context.read<AppState>().api
-          .delete('/api/movies/${widget.id}', {'delete_files': 'true'});
-    } else {
-      final ok = await confirm(context,
-          title: 'Remove from library?',
-          message: 'Files on disk are kept.',
-          confirmLabel: 'Remove');
-      if (!ok || !mounted) return;
-      await context.read<AppState>().api
-          .delete('/api/movies/${widget.id}');
+        message: 'Remove it from the library and optionally delete files?');
+    if (!mounted || choice == null) return;
+    try {
+      await context.read<AppState>().api.delete('/api/movies/${widget.id}',
+          choice == 'files' ? {'delete_files': 'true'} : null);
+    } catch (e) {
+      if (mounted) snack(context, '$e', error: true);
+      return;
     }
     if (mounted) {
       context.read<AppState>().refreshLibraries();

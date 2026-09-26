@@ -551,24 +551,25 @@ class _DetailPaneState extends State<_DetailPane> {
   Future<void> _act(String action) async {
     final t = widget.torrent!;
     final s = context.read<AppState>();
-    await s.api.post('/api/torrents/${t['hash']}/$action');
+    try {
+      await s.api.post('/api/torrents/${t['hash']}/$action');
+    } catch (e) {
+      if (mounted) snack(context, '$e', error: true);
+    }
     await s.refreshTorrents();
   }
 
   Future<void> _delete() async {
     final t = widget.torrent!;
     final s = context.read<AppState>();
-    final files = await confirm(context,
-        title: 'Delete torrent',
-        message: 'Delete downloaded files from disk too?',
-        confirmLabel: 'Delete files',
-        destructive: true);
-    if (!mounted) return;
-    if (files) {
-      await s.api
-          .delete('/api/torrents/${t['hash']}', {'delete_files': 'true'});
-    } else {
-      await s.api.delete('/api/torrents/${t['hash']}');
+    final choice = await confirmDelete(context, title: 'Delete torrent');
+    if (!mounted || choice == null) return;
+    try {
+      await s.api.delete('/api/torrents/${t['hash']}',
+          choice == 'files' ? {'delete_files': 'true'} : null);
+    } catch (e) {
+      if (mounted) snack(context, '$e', error: true);
+      return;
     }
     await s.refreshTorrents();
   }

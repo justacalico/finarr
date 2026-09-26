@@ -29,6 +29,7 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
           .read<AppState>()
           .api
           .get('/api/artists/${widget.id}');
+      if (!mounted) return;
       setState(() {
         _artist = r['artist'];
         _albums = r['albums'] ?? [];

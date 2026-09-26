@@ -80,13 +80,19 @@ pub async fn add(
     State(state): State<Arc<AppState>>,
     Json(body): Json<AddJson>,
 ) -> Result<Json<Value>, ApiError> {
-    if body.url.trim().is_empty() {
+    let url = body.url.trim();
+    if !url.starts_with("magnet:") && !url.starts_with("http://") && !url.starts_with("https://") {
+        return Err(ApiError::bad_request(
+            "url must be a magnet or http(s) link",
+        ));
+    }
+    if url.is_empty() {
         return Err(ApiError::bad_request("url required"));
     }
     let engine = state.engine.read().await;
     let (id, hash) = engine
         .add(
-            body.url.trim(),
+            url,
             None,
             body.category.as_deref().unwrap_or(""),
             body.paused.unwrap_or(false),

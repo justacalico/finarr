@@ -52,12 +52,12 @@ URL: https://gitlab.com/HttpAnimations/finarr
 %global __provides_exclude_from ^/opt/finarr/.*
 
 %description
-A secure, self-hostable Material 3 client for managing Devin work.
+A secure, self-hostable All-in-one media automation: torrents, movies, series and music.
 
 %install
 mkdir -p %{buildroot}/opt/finarr %{buildroot}/usr/bin
 cp -a %{bundle_dir}/. %{buildroot}/opt/finarr/
-ln -sf /opt/finarr/finarr_frontend %{buildroot}/usr/bin/finarr
+ln -sf /opt/finarr/finarr %{buildroot}/usr/bin/finarr
 
 %files
 /opt/finarr

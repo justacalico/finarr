@@ -77,6 +77,8 @@ impl QbitClient {
         let http = reqwest::Client::builder()
             .cookie_store(true)
             .user_agent("finarr")
+            .connect_timeout(std::time::Duration::from_secs(10))
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .context("build http client")?;
         let client = Self {

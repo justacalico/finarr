@@ -13,10 +13,18 @@ pub struct Db {
 
 impl Db {
     pub async fn connect(url: &str) -> Result<Self> {
-        let opts = SqliteConnectOptions::from_str(url)?
+        let mut opts = SqliteConnectOptions::from_str(url)?
             .create_if_missing(true)
             .foreign_keys(true)
-            .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
+            .busy_timeout(std::time::Duration::from_secs(10));
+        if url.starts_with("sqlite::memory:") {
+            // Without a shared cache every pooled connection gets its own
+            // private empty database.
+            opts = opts.shared_cache(true);
+        } else {
+            // WAL doesn't exist for memory DBs; only set it for files.
+            opts = opts.journal_mode(sqlx::sqlite::SqliteJournalMode::Wal);
+        }
         let pool = SqlitePoolOptions::new()
             .max_connections(8)
             .connect_with(opts)

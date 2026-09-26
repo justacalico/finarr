@@ -30,22 +30,28 @@ pub async fn login(
     .fetch_optional(state.db.pool())
     .await
     .map_err(ApiError::internal)?;
-    let Some(row) = row else {
-        return Err(ApiError::new(
-            axum::http::StatusCode::UNAUTHORIZED,
-            "invalid username or password",
-        ));
+    // Verify against a fixed dummy hash for unknown users so response time
+    // doesn't reveal whether the account exists.
+    static DUMMY: &str =
+        "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+    let (row, hash): (Option<sqlx::sqlite::SqliteRow>, String) = match row {
+        Some(r) if r.get::<i64, _>("disabled") == 0 => {
+            let hash = r.get::<String, _>("password_hash");
+            (Some(r), hash)
+        }
+        Some(r) => {
+            let _ = r; // disabled accounts authenticate-fail fast but stay quiet
+            return Err(ApiError::forbidden("account disabled"));
+        }
+        None => (None, DUMMY.to_string()),
     };
-    if row.get::<i64, _>("disabled") != 0 {
-        return Err(ApiError::forbidden("account disabled"));
-    }
-    let hash: String = row.get("password_hash");
-    if !password::verify_password(&body.password, &hash) {
+    if !password::verify_password(&body.password, &hash) || row.is_none() {
         return Err(ApiError::new(
             axum::http::StatusCode::UNAUTHORIZED,
             "invalid username or password",
         ));
     }
+    let row = row.unwrap();
     let user_id: i64 = row.get("id");
     sqlx::query(
         "UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",
@@ -72,7 +78,10 @@ fn bearer(headers: &HeaderMap) -> Option<String> {
     headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
+        .and_then(|v| {
+            v.strip_prefix("Bearer ")
+                .or_else(|| v.strip_prefix("bearer "))
+        })
         .map(str::to_string)
 }
 
@@ -125,6 +134,12 @@ pub async fn change_password(
     let new_hash = password::hash_password(&body.new_password).map_err(ApiError::internal)?;
     sqlx::query("UPDATE users SET password_hash = ? WHERE id = ?")
         .bind(new_hash)
+        .bind(user.id)
+        .execute(state.db.pool())
+        .await
+        .map_err(ApiError::internal)?;
+    // A compromised-password rotation has to kill the sessions it created.
+    sqlx::query("DELETE FROM sessions WHERE user_id = ? AND kind = 'session'")
         .bind(user.id)
         .execute(state.db.pool())
         .await

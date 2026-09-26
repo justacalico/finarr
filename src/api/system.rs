@@ -6,7 +6,7 @@ use serde::Serialize;
 use serde_json::{json, Value};
 use std::sync::Arc;
 
-use crate::auth::AuthUser;
+use crate::auth::{AdminUser, AuthUser};
 use crate::error::ApiError;
 use crate::settings::{self, GeneralSettings};
 use crate::AppState;
@@ -66,7 +66,7 @@ pub async fn info(_user: AuthUser, State(state): State<Arc<AppState>>) -> Json<I
 }
 
 pub async fn logs(
-    _user: AuthUser,
+    _user: AdminUser,
     Query(q): Query<std::collections::HashMap<String, String>>,
 ) -> Json<Value> {
     let limit = q
@@ -87,7 +87,8 @@ pub struct DiskInfo {
 pub async fn disk(_user: AuthUser, State(state): State<Arc<AppState>>) -> Json<Vec<DiskInfo>> {
     let paths = settings::get::<settings::PathsSettings>(&state.db, "paths")
         .await
-        .unwrap_or_default();
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
     let mut out = Vec::new();
     for p in [
         paths.downloads_dir,

@@ -31,7 +31,11 @@ async fn sweeper_loop(state: Arc<AppState>) {
 }
 
 async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
-    let engine = state.engine.read().await;
+    // Clone the engine handle and release the lock immediately: file IO and
+    // network calls below must not hold a read guard, or restart_engine's
+    // write() stalls for the whole sweep.
+    let engine = state.engine.read().await.clone();
+    let gen = state.engine_gen.load(std::sync::atomic::Ordering::SeqCst);
     let torrents = engine.list();
     let engine_settings = settings::get::<EngineSettings>(&state.db, "engine").await?;
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
@@ -56,7 +60,9 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
     let rows = sqlx::query(
         "SELECT id, hash, media_type, movie_id, episode_ids, album_id, save_path,
                 release_title, imported, state
-           FROM download_items WHERE client = 'builtin'",
+           FROM download_items
+          WHERE client = 'builtin'
+            AND state NOT IN ('imported', 'import_failed', 'removed')",
     )
     .fetch_all(state.db.pool())
     .await?;
@@ -67,6 +73,11 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
         let imported: i64 = row.get("imported");
         let Some(hash) = hash else { continue };
         let Some(t) = torrents.iter().find(|t| t.hash == hash) else {
+            // If the engine was restarted mid-sweep this snapshot is stale;
+            // leave the row alone and let the next pass decide.
+            if state.engine_gen.load(std::sync::atomic::Ordering::SeqCst) != gen {
+                continue;
+            }
             // Engine no longer knows it (deleted manually): mark removed.
             let _ = sqlx::query(
                 "UPDATE download_items SET state='removed' WHERE id=? AND state!='imported'",
@@ -74,6 +85,7 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
             .bind(item_id)
             .execute(state.db.pool())
             .await;
+            reset_media_state(&state.db, &row).await;
             continue;
         };
         let new_state = if t.finished {
@@ -84,7 +96,7 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
         sqlx::query(
             "UPDATE download_items SET state=?, progress=?, size_bytes=?,
                 save_path=COALESCE(NULLIF(save_path,''), ?)
-             WHERE id=?",
+             WHERE id=? AND state NOT IN ('imported', 'import_failed', 'removed')",
         )
         .bind(&new_state)
         .bind(t.progress)
@@ -99,11 +111,16 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
             if media_type.is_none() {
                 continue;
             }
-            let src = std::path::PathBuf::from(if t.save_path.is_empty() {
+            let base = std::path::PathBuf::from(if t.save_path.is_empty() {
                 row.get::<String, _>("save_path")
             } else {
                 t.save_path.clone()
             });
+            // Torrents land in <base>/<name> (dir or file). Only scan our own
+            // content, never the shared category folder, or one import would
+            // vacuum up files belonging to other downloads.
+            let scoped = base.join(&t.name);
+            let src = if scoped.exists() { scoped } else { base };
             let episode_ids: Vec<i64> =
                 serde_json::from_str(&row.get::<String, _>("episode_ids")).unwrap_or_default();
             let kind = match media_type.as_deref().unwrap_or("") {
@@ -172,11 +189,185 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
                         .bind(item_id)
                         .execute(state.db.pool())
                         .await?;
+                    reset_media_state(&state.db, &row).await;
                 }
             }
         }
     }
+    // --- external clients (qBittorrent rows) ---
+    sweep_external(state, &automation).await;
     Ok(())
+}
+
+/// Poll qBittorrent clients for externally-grabbed items and import them on
+/// completion. Assumes the client's download dir is reachable on disk (same
+/// as built-in imports, NAS setups normally share that mount).
+#[allow(clippy::map_entry)] // login() awaits while the map is borrowed
+async fn sweep_external(state: &Arc<AppState>, automation: &AutomationSettings) {
+    let rows = match sqlx::query(
+        "SELECT id, hash, media_type, movie_id, episode_ids, album_id, save_path,
+                release_title, imported, client
+           FROM download_items
+          WHERE client != 'builtin'
+            AND state NOT IN ('imported', 'import_failed', 'removed')",
+    )
+    .fetch_all(state.db.pool())
+    .await
+    {
+        Ok(r) => r,
+        Err(e) => {
+            tracing::warn!("external sweep query failed: {e:#}");
+            return;
+        }
+    };
+    if rows.is_empty() {
+        return;
+    }
+    let paths = settings::get::<PathsSettings>(&state.db, "paths")
+        .await
+        .unwrap_or_default()
+        .resolve(&state.config.data_dir);
+    let notifications = settings::get::<settings::NotificationSettings>(&state.db, "notifications")
+        .await
+        .unwrap_or_default();
+
+    let mut clients: std::collections::HashMap<i64, crate::download_clients::QbitClient> =
+        Default::default();
+    for row in rows {
+        let item_id: i64 = row.get("id");
+        let client_name: String = row.get("client");
+        let Some(client_db_id) = client_name
+            .strip_prefix("qbittorrent:")
+            .and_then(|s| s.parse::<i64>().ok())
+        else {
+            continue;
+        };
+        if !clients.contains_key(&client_db_id) {
+            // Entry API can't be used here: login() awaits while we borrow.
+            let cfg = sqlx::query("SELECT settings FROM download_clients WHERE id=? AND enabled=1")
+                .bind(client_db_id)
+                .fetch_optional(state.db.pool())
+                .await
+                .ok()
+                .flatten()
+                .and_then(|r| {
+                    serde_json::from_str::<crate::download_clients::QbitConfig>(
+                        &r.get::<String, _>("settings"),
+                    )
+                    .ok()
+                });
+            if let Some(cfg) = cfg {
+                match crate::download_clients::QbitClient::login(&cfg).await {
+                    Ok(c) => {
+                        clients.insert(client_db_id, c);
+                    }
+                    Err(e) => tracing::warn!("qbit client {client_db_id} login failed: {e:#}"),
+                }
+            }
+        }
+        let Some(client) = clients.get(&client_db_id) else {
+            continue;
+        };
+        let hash: Option<String> = row.get("hash");
+        let Some(hash) = hash.filter(|h| !h.is_empty()) else {
+            continue;
+        };
+        let list = match client.torrents().await {
+            Ok(l) => l,
+            Err(e) => {
+                tracing::warn!("qbit {client_db_id} list failed: {e:#}");
+                continue;
+            }
+        };
+        let Some(t) = list.iter().find(|t| t.hash.eq_ignore_ascii_case(&hash)) else {
+            continue;
+        };
+        let finished = t.progress >= 1.0;
+        let _ = sqlx::query(
+            "UPDATE download_items SET progress=?, size_bytes=?, state=?,
+                save_path=COALESCE(NULLIF(save_path,''), ?)
+             WHERE id=? AND state NOT IN ('imported','import_failed','removed')",
+        )
+        .bind(t.progress)
+        .bind(t.size_bytes)
+        .bind(if finished { "completed" } else { "downloading" })
+        .bind(&t.save_path)
+        .bind(item_id)
+        .execute(state.db.pool())
+        .await;
+        if !finished || !automation.auto_import {
+            continue;
+        }
+        let imported: i64 = row.get("imported");
+        if imported != 0 {
+            continue;
+        }
+        let media_type: Option<String> = row.get("media_type");
+        let episode_ids: Vec<i64> =
+            serde_json::from_str(&row.get::<String, _>("episode_ids")).unwrap_or_default();
+        let kind = match media_type.as_deref().unwrap_or("") {
+            "movie" => row
+                .get::<Option<i64>, _>("movie_id")
+                .map(media::import::ImportKind::Movie),
+            "series" => Some(media::import::ImportKind::Series(episode_ids)),
+            "album" => row
+                .get::<Option<i64>, _>("album_id")
+                .map(media::import::ImportKind::Album),
+            _ => None,
+        };
+        let Some(kind) = kind else { continue };
+        let src = std::path::PathBuf::from(&t.save_path);
+        let scoped = src.join(&t.name);
+        let src = if scoped.exists() { scoped } else { src };
+        let outcome = media::import::import(
+            &state.db,
+            &paths,
+            &src,
+            kind,
+            &row.get::<String, _>("release_title"),
+        )
+        .await;
+        match outcome {
+            Ok(o) => {
+                let _ = sqlx::query(
+                    "UPDATE download_items SET imported=1, state='imported' WHERE id=?",
+                )
+                .bind(item_id)
+                .execute(state.db.pool())
+                .await;
+                let title: String = row.get("release_title");
+                let _ = state
+                    .db
+                    .record_history(
+                        "imported",
+                        media_type.as_deref().unwrap_or(""),
+                        row.get::<Option<i64>, _>("movie_id")
+                            .or(row.get::<Option<i64>, _>("album_id")),
+                        &title,
+                        serde_json::json!({ "files": o.files, "count": o.imported }),
+                    )
+                    .await;
+                let _ =
+                    fulfill_requests(&state.db, media_type.as_deref().unwrap_or(""), &row).await;
+                crate::notify::send(
+                    &state.http,
+                    &notifications,
+                    "import",
+                    "Import complete",
+                    &format!("{}, {} file(s)", title, o.imported),
+                )
+                .await;
+            }
+            Err(e) => {
+                tracing::warn!("import of external item {item_id} failed: {e:#}");
+                let _ = sqlx::query("UPDATE download_items SET state='import_failed' WHERE id=?")
+                    .bind(item_id)
+                    .execute(state.db.pool())
+                    .await;
+                reset_media_state(&state.db, &row).await;
+            }
+        }
+    }
 }
 
 /// Mark matching open requests fulfilled after an import.
@@ -185,37 +376,65 @@ async fn fulfill_requests(
     media_type: &str,
     row: &sqlx::sqlite::SqliteRow,
 ) -> anyhow::Result<()> {
-    let external_id = match media_type {
-        "movie" => row
-            .try_get::<Option<i64>, _>("movie_id")
-            .ok()
-            .flatten()
-            .map(|id| id.to_string()),
-        "album" => row
-            .try_get::<Option<i64>, _>("album_id")
-            .ok()
-            .flatten()
-            .map(|id| id.to_string()),
-        _ => None,
-    };
-    if external_id.is_some() {
-        // Requests store the provider id, not our row id, so match on the
-        // media row's external id where we can.
-        if media_type == "movie" {
-            if let Some(mid) = row.try_get::<Option<i64>, _>("movie_id").ok().flatten() {
+    // Requests store the provider id (tmdb/tvmaze/mbid), so resolve the
+    // imported media back to its provider id before matching.
+    let (req_type, external_id) = match media_type {
+        "movie" => {
+            let id = row.try_get::<Option<i64>, _>("movie_id").ok().flatten();
+            let mut found = None;
+            if let Some(mid) = id {
                 if let Ok(m) = media::get_movie(db, mid).await {
-                    if let Some(tmdb) = m.tmdb_id {
-                        sqlx::query(
-                            "UPDATE requests SET status='fulfilled', resolved_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
-                             WHERE media_type='movie' AND external_id=? AND status IN ('pending','approved')",
-                        )
-                        .bind(tmdb.to_string())
-                        .execute(db.pool())
-                        .await?;
+                    found = m.tmdb_id.map(|t| t.to_string());
+                }
+            }
+            ("movie", found)
+        }
+        "series" => {
+            let ids: Vec<i64> =
+                serde_json::from_str(&row.get::<String, _>("episode_ids")).unwrap_or_default();
+            let mut found = None;
+            if let Some(eid) = ids.first() {
+                if let Ok(sid) =
+                    sqlx::query_scalar::<_, i64>("SELECT series_id FROM episodes WHERE id=?")
+                        .bind(*eid)
+                        .fetch_one(db.pool())
+                        .await
+                {
+                    if let Ok(s) = media::get_series(db, sid).await {
+                        found = s.tvmaze_id.map(|t| t.to_string());
                     }
                 }
             }
+            ("series", found)
         }
+        "album" => {
+            let id = row.try_get::<Option<i64>, _>("album_id").ok().flatten();
+            let mut found = None;
+            if let Some(aid) = id {
+                if let Ok(artist_id) =
+                    sqlx::query_scalar::<_, i64>("SELECT artist_id FROM albums WHERE id=?")
+                        .bind(aid)
+                        .fetch_one(db.pool())
+                        .await
+                {
+                    if let Ok(a) = media::get_artist(db, artist_id).await {
+                        found = a.mbid;
+                    }
+                }
+            }
+            ("artist", found)
+        }
+        _ => ("", None),
+    };
+    if let Some(ext) = external_id {
+        sqlx::query(
+            "UPDATE requests SET status='fulfilled', resolved_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+             WHERE media_type=? AND external_id=? AND status IN ('pending','approved')",
+        )
+        .bind(req_type)
+        .bind(ext)
+        .execute(db.pool())
+        .await?;
     }
     Ok(())
 }
@@ -284,6 +503,10 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
         if let Some(best) = indexers::search_all(db, state.http.clone(), &q)
             .await
             .into_iter()
+            .filter(|r| {
+                let p = media::parse::parse_release(&r.title);
+                media::parse::eligible_movie(&p, &r.title, &title, year)
+            })
             .map(|r| {
                 let s = indexers::score_release(&r, None, &[]);
                 (s, r)
@@ -304,7 +527,7 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
     let eps: Vec<(i64, i64, i64, i64, String)> = sqlx::query_as(
         "SELECT e.id, e.series_id, e.season_number, e.episode_number, s.title
            FROM episodes e JOIN series s ON s.id = e.series_id
-          WHERE e.monitored = 1 AND e.status = 'missing'
+          WHERE e.monitored = 1 AND s.monitored = 1 AND e.status = 'missing' '
             AND e.air_date IS NOT NULL AND e.air_date <= ?
           ORDER BY e.series_id, e.season_number",
     )
@@ -334,6 +557,7 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
             };
             if let Some((_, rel)) = best_of(
                 indexers::search_all(db, state.http.clone(), &q).await,
+                &title,
                 Some(season as u32),
                 &want_eps,
             )
@@ -360,6 +584,7 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
             };
             if let Some((_, rel)) = best_of(
                 indexers::search_all(db, state.http.clone(), &q).await,
+                &title,
                 Some(season as u32),
                 &[*epnum as u32],
             )
@@ -394,6 +619,10 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
         if let Some(best) = indexers::search_all(db, state.http.clone(), &q)
             .await
             .into_iter()
+            .filter(|r| {
+                media::parse::titles_match(&format!("{artist} {album}"), &r.title)
+                    || media::parse::titles_match(&album, &r.title)
+            })
             .map(|r| (indexers::score_release(&r, None, &[]), r))
             .filter(|(s, _)| *s > 0)
             .max_by_key(|(s, _)| *s)
@@ -411,11 +640,19 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
 
 async fn best_of(
     results: Vec<indexers::torznab::ReleaseResult>,
+    want_title: &str,
     season: Option<u32>,
     episodes: &[u32],
 ) -> Option<(i64, indexers::torznab::ReleaseResult)> {
     results
         .into_iter()
+        .filter(|r| {
+            let p = media::parse::parse_release(&r.title);
+            media::parse::titles_match(want_title, &r.title)
+                && season
+                    .map(|s| media::parse::eligible_tv(&p, s, episodes))
+                    .unwrap_or(true)
+        })
         .map(|r| (indexers::score_release(&r, season, episodes), r))
         .filter(|(s, _)| *s > 0)
         .max_by_key(|(s, _)| *s)
@@ -493,5 +730,46 @@ async fn refresh_loop(state: Arc<AppState>) {
                 Err(e) => tracing::warn!("series {id} refresh failed: {e:#}"),
             }
         }
+    }
+}
+
+/// When a download disappears or its import fails, put the linked media back
+/// to 'missing' so wanted-search can try again.
+async fn reset_media_state(db: &crate::db::Db, row: &sqlx::sqlite::SqliteRow) {
+    let media_type: Option<String> = row.get("media_type");
+    match media_type.as_deref() {
+        Some("movie") => {
+            if let Some(id) = row.get::<Option<i64>, _>("movie_id") {
+                let _ = sqlx::query(
+                    "UPDATE movies SET status='missing' WHERE id=? AND status='downloading'",
+                )
+                .bind(id)
+                .execute(db.pool())
+                .await;
+            }
+        }
+        Some("series") => {
+            let ids: Vec<i64> =
+                serde_json::from_str(&row.get::<String, _>("episode_ids")).unwrap_or_default();
+            for id in ids {
+                let _ = sqlx::query(
+                    "UPDATE episodes SET status='missing' WHERE id=? AND status='downloading'",
+                )
+                .bind(id)
+                .execute(db.pool())
+                .await;
+            }
+        }
+        Some("album") => {
+            if let Some(id) = row.get::<Option<i64>, _>("album_id") {
+                let _ = sqlx::query(
+                    "UPDATE albums SET status='missing' WHERE id=? AND status='downloading'",
+                )
+                .bind(id)
+                .execute(db.pool())
+                .await;
+            }
+        }
+        _ => {}
     }
 }

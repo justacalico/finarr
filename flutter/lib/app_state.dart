@@ -310,6 +310,7 @@ class AppState extends ChangeNotifier {
   @override
   void dispose() {
     _pollTimer?.cancel();
+    api.client.close();
     super.dispose();
   }
 }

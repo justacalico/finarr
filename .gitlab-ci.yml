@@ -196,5 +196,26 @@ pages:
     - cp -r landing/build/web/. public/
     - cp assets/icon-1024.png public/icon.png
     - cp -r altstore public/altstore
+    # Refresh the AltStore source from the latest GitHub release so version,
+    # date and download size are real, not the placeholder values in git.
+    - |
+      python3 - <<'PY'
+      import json, urllib.request
+      try:
+          rel = json.load(urllib.request.urlopen(
+              "https://api.github.com/repos/justacalico/finarr/releases/latest", timeout=15))
+          src = json.load(open("altstore/source.json"))
+          asset = next((a for a in rel["assets"] if a["name"].endswith(".ipa")), None)
+          if asset:
+              app = src["apps"][0]
+              app["version"] = rel["tag_name"].lstrip("v")
+              app["versionDate"] = rel["published_at"]
+              app["downloadURL"] = asset["browser_download_url"]
+              app["size"] = asset["size"]
+              app["versionDescription"] = f"Finarr {rel['tag_name']}"
+              json.dump(src, open("public/altstore/source.json", "w"), indent=2)
+      except Exception as e:
+          print(f"altstore refresh skipped: {e}")
+      PY
   artifacts:
     paths: [public]

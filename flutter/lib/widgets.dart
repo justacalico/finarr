@@ -73,7 +73,7 @@ class Poster extends StatelessWidget {
       color: F.accentSoft,
       alignment: Alignment.center,
       child: Text(
-        title.isEmpty ? '?' : title.trim()[0].toUpperCase(),
+        title.trim().isEmpty ? '?' : title.trim()[0].toUpperCase(),
         style: TextStyle(
           color: F.accent,
           fontSize: (width ?? 120) / 4,
@@ -91,6 +91,12 @@ class Poster extends StatelessWidget {
                 proxied,
                 fit: BoxFit.cover,
                 width: width,
+                headers: {
+                  // The image proxy requires auth; Image.network doesn't
+                  // send our Authorization header on its own.
+                  if (api.token != null)
+                    'authorization': 'Bearer ${api.token}',
+                },
                 loadingBuilder: (c, w, progress) =>
                     progress == null ? w : fallback,
                 errorBuilder: (_, _, _) => fallback,
@@ -167,7 +173,7 @@ class SectionHeader extends StatelessWidget {
               ],
             ),
           ),
-          if (trailing != null) trailing!,
+          ?trailing,
         ],
       ),
     );
@@ -301,4 +307,28 @@ class Stat extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Three-way delete choice: returns 'keep', 'files' or null (dismissed).
+Future<String?> confirmDelete(BuildContext context,
+    {required String title, String? message}) {
+  return showDialog<String>(
+    context: context,
+    builder: (c) => AlertDialog(
+      title: Text(title),
+      content: Text(message ?? 'Keep the files on disk or delete them too?'),
+      actions: [
+        TextButton(
+            onPressed: () => Navigator.pop(c), child: const Text('Cancel')),
+        TextButton(
+            onPressed: () => Navigator.pop(c, 'keep'),
+            child: const Text('Keep files')),
+        FilledButton(
+          style: FilledButton.styleFrom(backgroundColor: F.bad),
+          onPressed: () => Navigator.pop(c, 'files'),
+          child: const Text('Delete files'),
+        ),
+      ],
+    ),
+  );
 }

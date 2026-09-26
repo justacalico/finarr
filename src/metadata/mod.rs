@@ -81,6 +81,8 @@ pub fn http_client() -> reqwest::Client {
             "finarr/{} (https://gitlab.com/HttpAnimations/finarr)",
             env!("CARGO_PKG_VERSION")
         ))
+        .connect_timeout(std::time::Duration::from_secs(15))
+        .timeout(std::time::Duration::from_secs(120))
         .build()
         .unwrap_or_default()
 }

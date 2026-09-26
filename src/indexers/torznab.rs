@@ -180,11 +180,14 @@ impl TorznabClient {
         if !status.is_success() {
             bail!(
                 "torznab returned {status}: {}",
-                &body[..body.len().min(300)]
+                &body.chars().take(300).collect::<String>()
             );
         }
         if body.contains("<error") {
-            bail!("torznab error: {}", &body[..body.len().min(300)]);
+            bail!(
+                "torznab error: {}",
+                &body.chars().take(300).collect::<String>()
+            );
         }
         Ok(body)
     }
@@ -225,7 +228,7 @@ impl TorznabClient {
             params.push(("ep", e.to_string()));
         }
         if let Some(imdb) = &q.imdb_id {
-            params.push(("imdbid", imdb.trim_start_matches("tt").to_string()));
+            params.push(("imdbid", imdb.clone()));
         }
         if !q.categories.is_empty() {
             params.push((

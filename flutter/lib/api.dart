@@ -41,34 +41,47 @@ class Api {
   }
 
   Future<dynamic> get(String path, [Map<String, String>? q]) async {
-    final r = await client.get(_u(path, q), headers: _headers);
+    final r = await client
+        .get(_u(path, q), headers: _headers)
+        .timeout(const Duration(seconds: 30));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> post(String path, [Object? body]) async {
-    final r = await client.post(_u(path),
-        headers: _headers, body: body == null ? null : jsonEncode(body));
+    final r = await client
+        .post(_u(path),
+            headers: _headers,
+            body: body == null ? null : jsonEncode(body))
+        .timeout(const Duration(seconds: 30));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> put(String path, [Object? body]) async {
-    final r = await client.put(_u(path),
-        headers: _headers, body: body == null ? null : jsonEncode(body));
+    final r = await client
+        .put(_u(path),
+            headers: _headers,
+            body: body == null ? null : jsonEncode(body))
+        .timeout(const Duration(seconds: 30));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> patch(String path, [Object? body]) async {
-    final r = await client.patch(_u(path),
-        headers: _headers, body: body == null ? null : jsonEncode(body));
+    final r = await client
+        .patch(_u(path),
+            headers: _headers,
+            body: body == null ? null : jsonEncode(body))
+        .timeout(const Duration(seconds: 30));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
 
   Future<dynamic> delete(String path, [Map<String, String>? q]) async {
-    final r = await client.delete(_u(path, q), headers: _headers);
+    final r = await client
+        .delete(_u(path, q), headers: _headers)
+        .timeout(const Duration(seconds: 30));
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);
   }
@@ -82,7 +95,7 @@ class Api {
     });
     req.files.add(http.MultipartFile.fromBytes('torrent', bytes, filename: filename));
     if (category.isNotEmpty) req.fields['category'] = category;
-    final streamed = await req.send();
+    final streamed = await req.send().timeout(const Duration(minutes: 2));
     final r = await http.Response.fromStream(streamed);
     _check(r);
     return r.body.isEmpty ? null : jsonDecode(r.body);

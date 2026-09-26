@@ -63,6 +63,12 @@ class _ShellViewState extends State<ShellView> {
     final s = context.watch<AppState>();
     final pending = s.requests.where((r) => r['status'] == 'pending').length;
 
+    if (!s.booted) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: wide
           ? null

@@ -86,7 +86,10 @@ async fn lookup_token(db: &Db, token: &str) -> Result<Option<AuthUser>, sqlx::Er
 fn extract_token(parts: &Parts) -> Option<String> {
     if let Some(hv) = parts.headers.get(axum::http::header::AUTHORIZATION) {
         let v = hv.to_str().unwrap_or("");
-        if let Some(t) = v.strip_prefix("Bearer ") {
+        if let Some(t) = v
+            .strip_prefix("Bearer ")
+            .or_else(|| v.strip_prefix("bearer "))
+        {
             return Some(t.trim().to_string());
         }
     }
