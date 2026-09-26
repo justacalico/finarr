@@ -52,7 +52,7 @@ github-sync:
           echo "Tag $CI_COMMIT_TAG already mirrored to GitHub at $REMOTE_SHA, skipping"
         else
           SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
-          git push -f github "$CI_COMMIT_TAG"
+          git push -f github "refs/tags/$CI_COMMIT_TAG"
         fi
         # v* tags trigger the release build on GitHub; watch it so a failed
         # release build fails this pipeline.
@@ -74,7 +74,7 @@ github-sync:
         if [ "$REMOTE_MAIN" != "$SHA" ]; then
           SINCE=$(date -u +%Y-%m-%dT%H:%M:%SZ)
         fi
-        git push github HEAD:main
+        git push github HEAD:refs/heads/main
         # Watch the GitHub build for the pushed commit so a failed job on
         # GitHub also fails this pipeline.
         RUN_ID=$(bash scripts/watch-github-run.sh find --sha "$SHA" --event push --branch main ${SINCE:+--since "$SINCE"} || true)
