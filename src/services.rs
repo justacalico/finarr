@@ -34,8 +34,8 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
     // Clone the engine handle and release the lock immediately: file IO and
     // network calls below must not hold a read guard, or restart_engine's
     // write() stalls for the whole sweep.
-    let engine = state.engine.read().await.clone();
     let gen = state.engine_gen.load(std::sync::atomic::Ordering::SeqCst);
+    let engine = state.engine.read().await.clone();
     let torrents = engine.list();
     let engine_settings = settings::get::<EngineSettings>(&state.db, "engine").await?;
     let paths = settings::get::<PathsSettings>(&state.db, "paths")
@@ -116,6 +116,9 @@ async fn sweep_once(state: &Arc<AppState>) -> anyhow::Result<()> {
             } else {
                 t.save_path.clone()
             });
+            if base.as_os_str().is_empty() {
+                continue;
+            }
             // Torrents land in <base>/<name> (dir or file). Only scan our own
             // content, never the shared category folder, or one import would
             // vacuum up files belonging to other downloads.
@@ -280,6 +283,14 @@ async fn sweep_external(state: &Arc<AppState>, automation: &AutomationSettings) 
             }
         };
         let Some(t) = list.iter().find(|t| t.hash.eq_ignore_ascii_case(&hash)) else {
+            // Deleted inside qBittorrent: same handling as the builtin path.
+            let _ = sqlx::query(
+                "UPDATE download_items SET state='removed' WHERE id=? AND state!='imported'",
+            )
+            .bind(item_id)
+            .execute(state.db.pool())
+            .await;
+            reset_media_state(&state.db, &row).await;
             continue;
         };
         let finished = t.progress >= 1.0;
@@ -316,6 +327,9 @@ async fn sweep_external(state: &Arc<AppState>, automation: &AutomationSettings) 
             _ => None,
         };
         let Some(kind) = kind else { continue };
+        if t.save_path.is_empty() {
+            continue;
+        }
         let src = std::path::PathBuf::from(&t.save_path);
         let scoped = src.join(&t.name);
         let src = if scoped.exists() { scoped } else { src };

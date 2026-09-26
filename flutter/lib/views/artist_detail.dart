@@ -177,24 +177,16 @@ class _ArtistDetailViewState extends State<ArtistDetailView> {
   }
 
   Future<void> _delete() async {
-    final files = await confirm(context,
+    final choice = await confirmDelete(context,
         title: 'Delete artist',
-        message: 'Also delete imported files from disk?',
-        confirmLabel: 'Delete files',
-        destructive: true);
-    if (!mounted) return;
-    if (files) {
-      await context
-          .read<AppState>()
-          .api
-          .delete('/api/artists/${widget.id}', {'delete_files': 'true'});
-    } else {
-      final ok = await confirm(context,
-          title: 'Remove from library?',
-          message: 'Files on disk are kept.',
-          confirmLabel: 'Remove');
-      if (!ok || !mounted) return;
-      await context.read<AppState>().api.delete('/api/artists/${widget.id}');
+        message: 'Remove the artist and optionally delete the library folder?');
+    if (!mounted || choice == null) return;
+    try {
+      await context.read<AppState>().api.delete('/api/artists/${widget.id}',
+          choice == 'files' ? {'delete_files': 'true'} : null);
+    } catch (e) {
+      if (mounted) snack(context, '$e', error: true);
+      return;
     }
     if (mounted) {
       context.read<AppState>().refreshLibraries();

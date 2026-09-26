@@ -190,7 +190,7 @@ async fn import_movie(
     }
 
     let size = dest.metadata().map(|m| m.len() as i64).unwrap_or(0);
-    let file_id = media::link_file(
+    let _file_id = media::link_file(
         db,
         &dest.to_string_lossy(),
         size,
@@ -205,7 +205,6 @@ async fn import_movie(
         .bind(movie_id)
         .execute(db.pool())
         .await?;
-    let _ = file_id;
     Ok(ImportOutcome {
         imported: imported_paths.len(),
         skipped: 0,
@@ -226,7 +225,6 @@ async fn import_episodes(
     episode_ids: &[i64],
     release_title: &str,
 ) -> Result<ImportOutcome> {
-    eprintln!("import_episodes: {} ids", episode_ids.len());
     if episode_ids.is_empty() {
         bail!("no target episodes recorded for this download");
     }
@@ -237,7 +235,6 @@ async fn import_episodes(
             .fetch_one(db.pool())
             .await?;
         targets.push(ep);
-        eprintln!("loaded ep {}", id);
     }
     let series = media::get_series(db, targets[0].series_id).await?;
     let series_root = if series.path.is_empty() {
@@ -372,11 +369,6 @@ impl EpImport<'_> {
             &quality,
             &ext,
         ));
-        eprintln!(
-            "import_for: placing {} -> {}",
-            file.display(),
-            dest.display()
-        );
         place_file(file, &dest, &self.paths.import_mode).await?;
         let size = dest.metadata().map(|m| m.len() as i64).unwrap_or(0);
         let file_id = media::link_file(

@@ -29,7 +29,16 @@ class Api {
         if (token != null) 'authorization': 'Bearer $token',
       };
 
+  /// Called once when any request gets a 401 — the app should drop its
+  /// session and bounce back to login.
+  void Function()? onUnauthorized;
+
   void _check(http.Response r) {
+    if (r.statusCode == 401) {
+      final cb = onUnauthorized;
+      onUnauthorized = null;
+      cb?.call();
+    }
     if (r.statusCode >= 400) {
       String msg = 'HTTP ${r.statusCode}';
       try {

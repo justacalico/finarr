@@ -35,13 +35,9 @@ pub async fn login(
     static DUMMY: &str =
         "$argon2id$v=19$m=19456,t=2,p=1$AAAAAAAAAAAAAAAAAAAAAA$AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
     let (row, hash): (Option<sqlx::sqlite::SqliteRow>, String) = match row {
-        Some(r) if r.get::<i64, _>("disabled") == 0 => {
+        Some(r) => {
             let hash = r.get::<String, _>("password_hash");
             (Some(r), hash)
-        }
-        Some(r) => {
-            let _ = r; // disabled accounts authenticate-fail fast but stay quiet
-            return Err(ApiError::forbidden("account disabled"));
         }
         None => (None, DUMMY.to_string()),
     };
@@ -52,6 +48,9 @@ pub async fn login(
         ));
     }
     let row = row.unwrap();
+    if row.get::<i64, _>("disabled") != 0 {
+        return Err(ApiError::forbidden("account disabled"));
+    }
     let user_id: i64 = row.get("id");
     sqlx::query(
         "UPDATE users SET last_login_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?",

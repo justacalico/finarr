@@ -12,6 +12,7 @@ class AppState extends ChangeNotifier {
   AppState({Api? api, bool autostart = true})
       : api = api ?? Api(),
         super() {
+    this.api.onUnauthorized = () => logout();
     if (autostart) {
       _init();
     }

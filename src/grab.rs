@@ -75,7 +75,9 @@ pub async fn grab(
     let category = category_for(media_type);
     let (client_name, item_id, save_path) = match pick_client(db).await? {
         ClientChoice::Builtin => {
-            let engine = state.engine.read().await;
+            // Clone the engine handle and release the lock before fetching:
+            // a slow torrent download must not stall restart_engine.
+            let engine = state.engine.read().await.clone();
             let bytes = fetch_torrent(&state.http, &release.download_url).await?;
             let (id, hash) = engine
                 .add(&release.download_url, bytes, category, false)

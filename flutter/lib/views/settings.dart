@@ -259,6 +259,14 @@ class _PathsSectionState extends State<_PathsSection> with _SectionState {
 
   @override
   Widget build(BuildContext context) {
+    syncText(_downloads, current['downloads_dir']);
+    syncText(_movies, current['movies_root']);
+    syncText(_series, current['series_root']);
+    syncText(_music, current['music_root']);
+    if (!_synced && current['import_mode'] != null) {
+      _importMode = current['import_mode'];
+    }
+    markSynced();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -743,9 +751,15 @@ class _ClientDialogState extends State<_ClientDialog> {
                     _testResult = null;
                   });
                   try {
-                    final r = await context.read<AppState>().api.post(
-                        '/api/clients/test',
-                        _body());
+                    // Stored creds already exist when editing; sending the
+                    // masked password back would always fail the test.
+                    final r = widget.existing != null
+                        ? await context
+                            .read<AppState>()
+                            .api
+                            .post('/api/clients/${widget.existing!['id']}/test')
+                        : await context.read<AppState>().api.post(
+                            '/api/clients/test', _body());
                     setState(() => _testResult = r['ok'] == true
                         ? 'OK, connected'
                         : 'Failed: ${r['error']}');
@@ -811,6 +825,16 @@ class _EngineSectionState extends State<_EngineSection> with _SectionState {
 
   @override
   Widget build(BuildContext context) {
+    syncText(_port, current['listen_port']);
+    syncText(_dl, current['download_kbps']);
+    syncText(_ul, current['upload_kbps']);
+    syncText(_ratio, current['seed_ratio']);
+    syncText(_peers, current['peer_limit']);
+    if (!_synced) {
+      if (current['dht_enabled'] is bool) _dht = current['dht_enabled'];
+      if (current['lsd_enabled'] is bool) _lsd = current['lsd_enabled'];
+    }
+    markSynced();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [

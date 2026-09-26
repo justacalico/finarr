@@ -27,6 +27,14 @@ class _LoginViewState extends State<LoginView> {
   }
 
   @override
+  void dispose() {
+    _user.dispose();
+    _pass.dispose();
+    _server.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final s = context.watch<AppState>();
     return Scaffold(

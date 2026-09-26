@@ -293,24 +293,16 @@ class _SeriesDetailViewState extends State<SeriesDetailView> {
   }
 
   Future<void> _delete() async {
-    final files = await confirm(context,
+    final choice = await confirmDelete(context,
         title: 'Delete series',
-        message: 'Also delete imported files from disk?',
-        confirmLabel: 'Delete files',
-        destructive: true);
-    if (!mounted) return;
-    if (files) {
-      await context
-          .read<AppState>()
-          .api
-          .delete('/api/series/${widget.id}', {'delete_files': 'true'});
-    } else {
-      final ok = await confirm(context,
-          title: 'Remove from library?',
-          message: 'Files on disk are kept.',
-          confirmLabel: 'Remove');
-      if (!ok || !mounted) return;
-      await context.read<AppState>().api.delete('/api/series/${widget.id}');
+        message: 'Remove it from the library and optionally delete files?');
+    if (!mounted || choice == null) return;
+    try {
+      await context.read<AppState>().api.delete('/api/series/${widget.id}',
+          choice == 'files' ? {'delete_files': 'true'} : null);
+    } catch (e) {
+      if (mounted) snack(context, '$e', error: true);
+      return;
     }
     if (mounted) {
       context.read<AppState>().refreshLibraries();

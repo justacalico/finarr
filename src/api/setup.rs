@@ -25,6 +25,17 @@ pub async fn setup(
     State(state): State<Arc<AppState>>,
     Json(body): Json<SetupBody>,
 ) -> Result<Json<Value>, ApiError> {
+    // Validate and hash before opening the write transaction: argon2 takes
+    // ~100ms and shouldn't hold a write lock.
+    if body.username.trim().is_empty() {
+        return Err(ApiError::bad_request("username required"));
+    }
+    if body.password.len() < 8 {
+        return Err(ApiError::bad_request(
+            "password must be at least 8 characters",
+        ));
+    }
+    let hash = password::hash_password(&body.password).map_err(ApiError::internal)?;
     // A single transaction keeps two concurrent setup posts from both
     // passing the empty-users check.
     let mut tx = state.db.pool().begin().await.map_err(ApiError::internal)?;
@@ -35,15 +46,6 @@ pub async fn setup(
     if count > 0 && !state.config.dev_mode {
         return Err(ApiError::forbidden("setup already completed"));
     }
-    if body.username.trim().is_empty() {
-        return Err(ApiError::bad_request("username required"));
-    }
-    if body.password.len() < 8 {
-        return Err(ApiError::bad_request(
-            "password must be at least 8 characters",
-        ));
-    }
-    let hash = password::hash_password(&body.password).map_err(ApiError::internal)?;
     let row = sqlx::query(
         "INSERT INTO users (username, password_hash, display_name, role)
          VALUES (?, ?, ?, 'admin') RETURNING id",
