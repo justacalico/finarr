@@ -41,7 +41,7 @@ RUN apt-get update \
     && useradd --system --create-home --shell /usr/sbin/nologin finarr \
     && install -d -o finarr -g finarr /data
 COPY --from=backend /app/target/release/finarr /usr/local/bin/finarr
-USER finarr
+COPY scripts/docker-entrypoint.sh /usr/local/bin/entrypoint
 WORKDIR /home/finarr
 ENV FINARR_DATA_DIR=/data \
     FINARR_HOST=0.0.0.0 \
@@ -50,4 +50,4 @@ EXPOSE 8787
 EXPOSE 4242
 EXPOSE 4242/udp
 VOLUME ["/data"]
-ENTRYPOINT ["finarr"]
+ENTRYPOINT ["entrypoint"]
