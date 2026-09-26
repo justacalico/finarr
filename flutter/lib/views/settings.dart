@@ -140,7 +140,7 @@ mixin _SectionState<T extends StatefulWidget> on State<T> {
     if (v.isNotEmpty && c.text.isEmpty) c.text = v;
   }
 
-  void syncBool(bool Function() getter, void Function(bool) set, Object? v) {
+  void syncBool(void Function(bool) set, Object? v) {
     if (v is bool && !_synced) {
       set(v);
     }
@@ -983,9 +983,8 @@ class _AutomationSectionState extends State<_AutomationSection>
   @override
   Widget build(BuildContext context) {
     syncText(_interval, current['search_interval_min']);
-    syncBool(() => _searchEnabled, (v) => _searchEnabled = v,
-        current['wanted_search_enabled']);
-    syncBool(() => _autoImport, (v) => _autoImport = v, current['auto_import']);
+    syncBool((v) => _searchEnabled = v, current['wanted_search_enabled']);
+    syncBool((v) => _autoImport = v, current['auto_import']);
     markSynced();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
