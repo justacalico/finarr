@@ -216,17 +216,22 @@ class _FeatureGrid extends StatelessWidget {
             style:
                 TextStyle(fontSize: 15, color: Colors.white.withValues(alpha: 0.6))),
         const SizedBox(height: 32),
-        GridView.count(
-          crossAxisCount: wide ? 2 : 1,
-          shrinkWrap: true,
-          physics: const NeverScrollableScrollPhysics(),
-          mainAxisSpacing: 16,
-          crossAxisSpacing: 16,
-          childAspectRatio: wide ? 3.4 : 3.0,
-          children: [
-            for (final f in _features)
-              _FeatureCard(icon: f.$3, title: f.$1, body: f.$2),
-          ],
+        LayoutBuilder(
+          builder: (context, c) {
+            final cardW = wide ? (c.maxWidth - 16) / 2 : c.maxWidth;
+            return Wrap(
+              spacing: 16,
+              runSpacing: 16,
+              children: [
+                for (final f in _features)
+                  SizedBox(
+                    width: cardW,
+                    child: _FeatureCard(
+                        icon: f.$3, title: f.$1, body: f.$2),
+                  ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -386,12 +391,13 @@ class _Footer extends StatelessWidget {
       decoration: const BoxDecoration(
         border: Border(top: BorderSide(color: Color(0xFF2C2C2E))),
       ),
-      child: Row(
+      child: Wrap(
+        alignment: WrapAlignment.spaceBetween,
+        crossAxisAlignment: WrapCrossAlignment.center,
         children: [
           Text('Finarr · AGPL-3.0',
               style: TextStyle(
                   fontSize: 13, color: Colors.white.withValues(alpha: 0.5))),
-          const Spacer(),
           _Link(
               label: 'GitHub mirror',
               url: 'https://github.com/justacalico/finarr'),
