@@ -2,6 +2,17 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.2.0](https://gitlab.com/HttpAnimations/finarr/compare/331aa3b270ee00e1785643acffc3feda15fdfc32..v0.2.0) - 2026-09-27
+#### Features
+- 添加 OLED 纯黑主题 - ([f9c7e44](https://gitlab.com/HttpAnimations/finarr/commit/f9c7e44d02ff116e464e66122bb53e70135df0a6)) - HttpAnimations
+#### Bug Fixes
+- 侧栏速率徽章改为紧凑堆叠样式 - ([f5d0493](https://gitlab.com/HttpAnimations/finarr/commit/f5d0493e4b0f12e71a6792b09030617ad6565cad)) - HttpAnimations
+- 开发模式跳过登录，网页版隐藏服务器选择 - ([effab0a](https://gitlab.com/HttpAnimations/finarr/commit/effab0a8a34bb71bbe71c16a3c811d1051b34b60)) - HttpAnimations
+- 移除 wanted 查询中的多余引号 - ([238d3d5](https://gitlab.com/HttpAnimations/finarr/commit/238d3d51a45dc16901281160748e5939b4220be6)) - HttpAnimations
+- 开发模式使用随机 BitTorrent 端口 - ([331aa3b](https://gitlab.com/HttpAnimations/finarr/commit/331aa3b270ee00e1785643acffc3feda15fdfc32)) - HttpAnimations
+
+- - -
+
 ## [v0.1.2](https://gitlab.com/HttpAnimations/finarr/compare/2c49a54e4a707d3559d03314972512d18b22037a..v0.1.2) - 2026-09-26
 #### Bug Fixes
 - 落地页 base-href 改为根路径 - ([cf89ed5](https://gitlab.com/HttpAnimations/finarr/commit/cf89ed59daa32af34f77a6eec86c8fa71981430d)) - HttpAnimations
