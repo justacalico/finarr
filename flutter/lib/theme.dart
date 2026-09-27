@@ -29,51 +29,60 @@ class F {
 
   static ThemeData dark() => _base(Brightness.dark);
   static ThemeData light() => _base(Brightness.light);
+  static ThemeData oled() => _base(Brightness.dark, oled: true);
 
-  static ThemeData _base(Brightness b) {
+  static ThemeData _base(Brightness b, {bool oled = false}) {
     final dark = b == Brightness.dark;
+    // OLED keeps the dark palette but drops every surface to pure black;
+    // borders stay lifted just enough to separate cards from the void.
+    final bg = oled ? const Color(0xFF000000) : (dark ? bgDark : bgLight);
+    final surface =
+        oled ? const Color(0xFF0A0A0B) : (dark ? surfaceDark : surfaceLight);
+    final card = oled ? const Color(0xFF0F0F11) : (dark ? cardDark : cardLight);
+    final border =
+        oled ? const Color(0xFF232325) : (dark ? borderDark : borderLight);
     final scheme = ColorScheme.fromSeed(
       seedColor: accent,
       brightness: b,
-      surface: dark ? surfaceDark : surfaceLight,
+      surface: dark ? (oled ? surface : surfaceDark) : surfaceLight,
       primary: accent,
     );
     return ThemeData(
       useMaterial3: true,
       brightness: b,
       colorScheme: scheme,
-      scaffoldBackgroundColor: dark ? bgDark : bgLight,
+      scaffoldBackgroundColor: bg,
       fontFamily: 'system-ui',
       dividerTheme: DividerThemeData(
-        color: dark ? borderDark : borderLight,
+        color: border,
         thickness: 1,
         space: 1,
       ),
       cardTheme: CardThemeData(
-        color: dark ? cardDark : cardLight,
+        color: card,
         elevation: 0,
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(radius),
-          side: BorderSide(color: dark ? borderDark : borderLight),
+          side: BorderSide(color: border),
         ),
       ),
       dialogTheme: DialogThemeData(
-        backgroundColor: dark ? surfaceDark : surfaceLight,
+        backgroundColor: surface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: dark ? cardDark : const Color(0xFFF0F0F2),
+        fillColor: dark ? card : const Color(0xFFF0F0F2),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusS),
-          borderSide: BorderSide(color: dark ? borderDark : borderLight),
+          borderSide: BorderSide(color: border),
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusS),
-          borderSide: BorderSide(color: dark ? borderDark : borderLight),
+          borderSide: BorderSide(color: border),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(radiusS),
@@ -102,7 +111,7 @@ class F {
         ),
       ),
       navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: dark ? surfaceDark : surfaceLight,
+        backgroundColor: surface,
         selectedIconTheme: const IconThemeData(color: accent),
         selectedLabelTextStyle: const TextStyle(
           color: accent,
@@ -111,7 +120,7 @@ class F {
         indicatorColor: accentSoft,
       ),
       navigationBarTheme: NavigationBarThemeData(
-        backgroundColor: dark ? surfaceDark : surfaceLight,
+        backgroundColor: surface,
         indicatorColor: accentSoft,
         iconTheme: WidgetStateProperty.resolveWith(
           (s) => s.contains(WidgetState.selected)
@@ -133,11 +142,11 @@ class F {
         indicatorColor: accent,
         labelColor: accent,
         unselectedLabelColor: dark ? Colors.white54 : Colors.black54,
-        dividerColor: dark ? borderDark : borderLight,
+        dividerColor: border,
       ),
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
+      progressIndicatorTheme: ProgressIndicatorThemeData(
         color: accent,
-        linearTrackColor: Color(0xFF2C2C2E),
+        linearTrackColor: border,
         borderRadius: BorderRadius.all(Radius.circular(4)),
       ),
       switchTheme: SwitchThemeData(
@@ -150,9 +159,9 @@ class F {
       ),
       tooltipTheme: TooltipThemeData(
         decoration: BoxDecoration(
-          color: dark ? const Color(0xFF2C2C2E) : Colors.white,
+          color: dark ? border : Colors.white,
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: dark ? borderDark : borderLight),
+          border: Border.all(color: border),
         ),
         textStyle: TextStyle(
           color: dark ? Colors.white : Colors.black87,
@@ -160,10 +169,10 @@ class F {
         ),
       ),
       popupMenuTheme: PopupMenuThemeData(
-        color: dark ? cardDark : cardLight,
+        color: card,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(10),
-          side: BorderSide(color: dark ? borderDark : borderLight),
+          side: BorderSide(color: border),
         ),
       ),
       checkboxTheme: CheckboxThemeData(

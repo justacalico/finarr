@@ -229,6 +229,7 @@ class _GeneralSectionState extends State<_GeneralSection>
               ButtonSegment(value: 'system', label: Text('System')),
               ButtonSegment(value: 'light', label: Text('Light')),
               ButtonSegment(value: 'dark', label: Text('Dark')),
+              ButtonSegment(value: 'oled', label: Text('OLED')),
             ],
             selected: {s.themeMode},
             onSelectionChanged: (v) => s.setThemeMode(v.first),

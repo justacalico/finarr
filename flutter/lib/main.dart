@@ -80,10 +80,11 @@ class _FinarrAppState extends State<FinarrApp> {
       title: s.instanceName,
       debugShowCheckedModeBanner: false,
       theme: F.light(),
-      darkTheme: F.dark(),
+      darkTheme: s.themeMode == 'oled' ? F.oled() : F.dark(),
       themeMode: switch (s.themeMode) {
         'light' => ThemeMode.light,
         'dark' => ThemeMode.dark,
+        'oled' => ThemeMode.dark,
         _ => ThemeMode.system,
       },
       routerConfig: _router,
