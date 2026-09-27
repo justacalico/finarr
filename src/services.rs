@@ -541,7 +541,7 @@ pub async fn wanted_search(state: &Arc<AppState>) -> anyhow::Result<usize> {
     let eps: Vec<(i64, i64, i64, i64, String)> = sqlx::query_as(
         "SELECT e.id, e.series_id, e.season_number, e.episode_number, s.title
            FROM episodes e JOIN series s ON s.id = e.series_id
-          WHERE e.monitored = 1 AND s.monitored = 1 AND e.status = 'missing' '
+          WHERE e.monitored = 1 AND s.monitored = 1 AND e.status = 'missing'
             AND e.air_date IS NOT NULL AND e.air_date <= ?
           ORDER BY e.series_id, e.season_number",
     )
