@@ -2,6 +2,14 @@
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
 - - -
+## [v0.1.2](https://gitlab.com/HttpAnimations/finarr/compare/2c49a54e4a707d3559d03314972512d18b22037a..v0.1.2) - 2026-09-26
+#### Bug Fixes
+- 落地页 base-href 改为根路径 - ([cf89ed5](https://gitlab.com/HttpAnimations/finarr/commit/cf89ed59daa32af34f77a6eec86c8fa71981430d)) - HttpAnimations
+- GitLab 发布改为 REST API 上传 - ([445967f](https://gitlab.com/HttpAnimations/finarr/commit/445967f09230b99b1e0182b99206211cc67c2de2)) - HttpAnimations
+- 同步脚本兼容包列表为空的情况 - ([f4dc9f6](https://gitlab.com/HttpAnimations/finarr/commit/f4dc9f6c41d0f600565f25c90dc144aafe0c62f6)) - HttpAnimations
+
+- - -
+
 ## [v0.1.1](https://gitlab.com/HttpAnimations/finarr/compare/3e91d7fd148a40578fe81525fc8ad0742842d0d0..v0.1.1) - 2026-09-26
 #### Bug Fixes
 - Docker 镜像发布迁移到 GitHub Actions - ([76eb52d](https://gitlab.com/HttpAnimations/finarr/commit/76eb52d43dcc81e0ad321856ca26c11a4d1e0892)) - HttpAnimations
