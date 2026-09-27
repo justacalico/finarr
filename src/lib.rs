@@ -53,7 +53,10 @@ impl AppState {
         let paths = settings::get::<PathsSettings>(&self.db, "paths")
             .await?
             .resolve(&self.config.data_dir);
-        let engine_settings = settings::get::<EngineSettings>(&self.db, "engine").await?;
+        let mut engine_settings = settings::get::<EngineSettings>(&self.db, "engine").await?;
+        if self.config.dev_mode {
+            engine_settings.listen_port = 0;
+        }
         // Stop the old session first so the new one can keep the same port.
         // A brief window exists where readers hold a dead engine: they get
         // empty results rather than errors, and engine_gen lets sweepers
@@ -77,7 +80,11 @@ async fn start_engine(state_db: &db::Db, cfg: &config::Config) -> Result<torrent
     let paths = settings::get::<PathsSettings>(state_db, "paths")
         .await?
         .resolve(&cfg.data_dir);
-    let engine_settings = settings::get::<EngineSettings>(state_db, "engine").await?;
+    let mut engine_settings = settings::get::<EngineSettings>(state_db, "engine").await?;
+    // Dev runs are ephemeral and often coexist: always pick a free port.
+    if cfg.dev_mode {
+        engine_settings.listen_port = 0;
+    }
     torrents::Engine::start(
         &engine_settings,
         PathBuf::from(&paths.downloads_dir),
