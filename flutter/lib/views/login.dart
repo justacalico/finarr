@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -113,12 +114,15 @@ class _LoginViewState extends State<LoginView> {
                                 strokeWidth: 2, color: Colors.white))
                         : const Text('Sign in'),
                   ),
-                  TextButton(
-                    onPressed: () =>
-                        setState(() => _showServer = !_showServer),
-                    child: Text(
-                        _showServer ? 'Same server as page' : 'Different server?'),
-                  ),
+                  // On web the app is served by the server itself; a server
+                  // picker only makes sense on the mobile/desktop clients.
+                  if (!kIsWeb)
+                    TextButton(
+                      onPressed: () =>
+                          setState(() => _showServer = !_showServer),
+                      child: Text(
+                          _showServer ? 'Same server as page' : 'Different server?'),
+                    ),
                 ],
               ),
             ),

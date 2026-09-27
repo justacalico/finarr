@@ -23,7 +23,10 @@ class AppState extends ChangeNotifier {
   // ---------------- boot / auth ----------------
   bool booted = false;
   bool setupRequired = false;
-  bool get loggedIn => api.token != null;
+  // Dev mode runs authless: the backend accepts any request as a local
+  // admin, so the app should skip the login screen entirely.
+  bool devMode = false;
+  bool get loggedIn => api.token != null || devMode;
   Map<String, dynamic>? user;
   String version = '';
   String instanceName = 'Finarr';
@@ -52,6 +55,7 @@ class AppState extends ChangeNotifier {
     try {
       final s = await api.get('/api/status');
       setupRequired = s['setup_required'] == true;
+      devMode = s['dev_mode'] == true;
       version = s['version'] ?? '';
       instanceName = s['instance_name'] ?? 'Finarr';
     } catch (_) {}
