@@ -117,7 +117,7 @@ class _ShellViewState extends State<ShellView> {
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.end,
                   children: [
-                    _SpeedBadge(speeds: s.speeds),
+                    _SpeedBadge(speeds: s.speeds, compact: true),
                     const SizedBox(height: 8),
                     _UserMenu(user: s.user),
                     const SizedBox(height: 12),
@@ -199,12 +199,34 @@ class _ShellViewState extends State<ShellView> {
 
 class _SpeedBadge extends StatelessWidget {
   final Map<String, dynamic> speeds;
-  const _SpeedBadge({required this.speeds});
+  // The rail is ~72px wide: a horizontal pill overflows it, so compact
+  // stacks the two rates vertically.
+  final bool compact;
+  const _SpeedBadge({required this.speeds, this.compact = false});
+
+  Widget _rate(IconData icon, Color color, dynamic bytes) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 13, color: color),
+          const SizedBox(width: 3),
+          Text(fmtSpeed(bytes), style: const TextStyle(fontSize: 11)),
+        ],
+      );
 
   @override
   Widget build(BuildContext context) {
     final dl = speeds['download'] ?? 0;
     final ul = speeds['upload'] ?? 0;
+    if (compact) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _rate(Icons.arrow_downward, F.info, dl),
+          const SizedBox(height: 2),
+          _rate(Icons.arrow_upward, F.ok, ul),
+        ],
+      );
+    }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
@@ -214,13 +236,9 @@ class _SpeedBadge extends StatelessWidget {
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.arrow_downward, size: 13, color: F.info),
-          const SizedBox(width: 3),
-          Text(fmtSpeed(dl), style: const TextStyle(fontSize: 11)),
+          _rate(Icons.arrow_downward, F.info, dl),
           const SizedBox(width: 8),
-          const Icon(Icons.arrow_upward, size: 13, color: F.ok),
-          const SizedBox(width: 3),
-          Text(fmtSpeed(ul), style: const TextStyle(fontSize: 11)),
+          _rate(Icons.arrow_upward, F.ok, ul),
         ],
       ),
     );
